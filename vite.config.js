@@ -1,8 +1,11 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Use VITE_BASE env var for deployment flexibility (Vercel uses '/', GitHub Pages uses '/ResellApp/')
+const base = process.env.VITE_BASE || '/';
+
 export default defineConfig({
-  base: '/ResellApp/',
+  base,
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -15,8 +18,8 @@ export default defineConfig({
         background_color: '#0f0f23',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/ResellApp/#/',
-        scope: '/ResellApp/',
+        start_url: `${base}#/`,
+        scope: base,
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -32,7 +35,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        navigateFallback: '/ResellApp/index.html',
+        navigateFallback: `${base}index.html`,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {

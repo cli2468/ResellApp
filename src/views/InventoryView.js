@@ -2,6 +2,7 @@
 
 import { getLots, recordSale, deleteLot, isFullySold, hasSales, getLotTotalProfit, deleteSale, updateSale, getReturnDeadline, getDaysUntilReturn } from '../services/storage.js';
 import { formatCurrency, formatDate, PLATFORM_FEES, calculateSaleProfit } from '../services/calculations.js';
+import { importLotsFromCSV, generateCSVTemplate } from '../services/csvImport.js';
 
 let activeTab = 'all';
 let selectedLotId = null;
@@ -11,6 +12,7 @@ let selectedPlatform = 'facebook';
 let expandedLots = new Set();
 let shippingCost = '';
 let saleDate = new Date().toISOString().split('T')[0]; // Default to today
+let showImportModal = false;
 
 export function setActiveTab(tab) {
   activeTab = tab;
@@ -27,11 +29,22 @@ export function InventoryView() {
   }
 
   const modalHtml = selectedLotId ? renderSaleModal() : '';
+  const importModalHtml = showImportModal ? renderImportModal() : '';
 
   return `
     <div class="page">
       <div class="container">
-        <h1 class="page-title">Inventory</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+          <h1 class="page-title" style="margin-bottom: 0;">Inventory</h1>
+          <button class="btn btn-secondary btn-sm" id="import-csv-btn" style="padding: 8px 12px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Import
+          </button>
+        </div>
         
         <div class="tabs">
           <button class="tab ${activeTab === 'all' ? 'active' : ''}" data-tab="all">All</button>
@@ -47,6 +60,7 @@ export function InventoryView() {
       </div>
     </div>
     ${modalHtml}
+    ${importModalHtml}
   `;
 }
 
@@ -171,6 +185,41 @@ function renderEmptyState() {
       <div class="empty-icon">📦</div>
       <div class="empty-title">No items yet</div>
       <div class="empty-text">Add your first inventory lot by taking a screenshot of your Amazon order</div>
+    </div>
+  `;
+}
+
+function renderImportModal() {
+  return `
+    <div class="modal-overlay" id="import-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Import from CSV</h2>
+          <button class="modal-close" id="close-import-modal">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="import-drop-zone" id="import-drop-zone">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-bottom: var(--spacing-md);">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <p style="margin: 0; color: var(--text-secondary);">Drop CSV file here or click to browse</p>
+          <p style="margin: var(--spacing-sm) 0 0 0; font-size: var(--font-size-sm); color: var(--text-muted);">Columns: name, cost, quantity, purchase_date</p>
+          <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+        </div>
+        
+        <div id="import-result" style="display: none; margin-top: var(--spacing-lg);"></div>
+        
+        <div style="margin-top: var(--spacing-lg); text-align: center;">
+          <button class="btn btn-secondary btn-sm" id="download-template">Download Template</button>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -584,5 +633,104 @@ export function initInventoryEvents() {
       closeSaleModal();
     }
   });
+
+  // === CSV Import Events ===
+
+  // Open import modal
+  document.getElementById('import-csv-btn')?.addEventListener('click', () => {
+    showImportModal = true;
+    window.dispatchEvent(new CustomEvent('viewchange'));
+  });
+
+  // Close import modal
+  document.getElementById('close-import-modal')?.addEventListener('click', closeImportModal);
+  document.getElementById('import-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'import-modal') closeImportModal();
+  });
+
+  // Drop zone click to browse
+  document.getElementById('import-drop-zone')?.addEventListener('click', () => {
+    document.getElementById('csv-file-input')?.click();
+  });
+
+  // File input change
+  document.getElementById('csv-file-input')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (file) await processCSVFile(file);
+  });
+
+  // Drag and drop
+  const dropZone = document.getElementById('import-drop-zone');
+  if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files?.[0];
+      if (file && file.name.endsWith('.csv')) {
+        await processCSVFile(file);
+      }
+    });
+  }
+
+  // Download template
+  document.getElementById('download-template')?.addEventListener('click', () => {
+    const template = generateCSVTemplate();
+    const blob = new Blob([template], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'inventory_template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
 }
 
+function closeImportModal() {
+  showImportModal = false;
+  window.dispatchEvent(new CustomEvent('viewchange'));
+}
+
+async function processCSVFile(file) {
+  const resultEl = document.getElementById('import-result');
+  if (!resultEl) return;
+
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<p class="text-muted">Importing...</p>';
+
+  try {
+    const { success, errors } = await importLotsFromCSV(file);
+
+    let html = `<div class="import-success">✅ Imported ${success} lot${success !== 1 ? 's' : ''} successfully</div>`;
+
+    if (errors.length > 0) {
+      html += `<div class="import-errors" style="margin-top: var(--spacing-md); color: var(--accent-warning);">
+        <strong>⚠️ ${errors.length} error${errors.length !== 1 ? 's' : ''}:</strong>
+        <ul style="margin: var(--spacing-sm) 0 0 var(--spacing-lg); padding: 0; font-size: var(--font-size-sm);">
+          ${errors.slice(0, 5).map(e => `<li>${e}</li>`).join('')}
+          ${errors.length > 5 ? `<li>...and ${errors.length - 5} more</li>` : ''}
+        </ul>
+      </div>`;
+    }
+
+    if (success > 0) {
+      html += `<button class="btn btn-success btn-full" style="margin-top: var(--spacing-lg);" onclick="window.dispatchEvent(new CustomEvent('viewchange'))">Done</button>`;
+    }
+
+    resultEl.innerHTML = html;
+
+    if (success > 0) {
+      setTimeout(() => {
+        closeImportModal();
+      }, 1500);
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<div class="import-error text-danger">❌ Import failed: ${err.message}</div>`;
+  }
+}

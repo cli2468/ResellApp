@@ -1206,3 +1206,30 @@ body {
 .day-sale-profit {
   font-weight: 600;
 }
+
+/* ===== CSV Import ===== */
+.import-drop-zone {
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.import-drop-zone:hover,
+.import-drop-zone.drag-over {
+  border-color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.import-drop-zone.drag-over {
+  transform: scale(1.02);
+}
+
+.import-success {
+  color: var(--accent-success);
+  font-weight: 600;
+  font-size: var(--font-size-lg);
+  text-align: center;
+}

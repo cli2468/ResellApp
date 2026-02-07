@@ -278,6 +278,95 @@ function renderSaleModal() {
   `;
 }
 
+// Update just the lot list content without re-rendering the entire page
+function updateLotList() {
+  const allLots = getLots();
+  let filteredLots = allLots;
+  if (activeTab === 'unsold') {
+    filteredLots = allLots.filter(lot => lot.remaining > 0);
+  } else if (activeTab === 'sold') {
+    filteredLots = allLots.filter(lot => isFullySold(lot));
+  }
+
+  // Update tab active states
+  document.querySelectorAll('.tab').forEach(tab => {
+    if (tab.dataset.tab === activeTab) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+
+  // Update lot list content
+  const lotList = document.querySelector('.lot-list');
+  const container = document.querySelector('.container');
+  if (lotList) {
+    lotList.innerHTML = filteredLots.map(lot => renderLotCard(lot)).join('');
+  }
+
+  // Handle empty state
+  const existingEmptyState = document.querySelector('.empty-state');
+  if (filteredLots.length === 0) {
+    if (!existingEmptyState && container) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.innerHTML = renderEmptyState();
+      const lotListEl = document.querySelector('.lot-list');
+      if (lotListEl) {
+        lotListEl.before(emptyDiv.firstElementChild);
+      }
+    }
+  } else if (existingEmptyState) {
+    existingEmptyState.remove();
+  }
+
+  // Re-attach event listeners for the new lot cards
+  initLotCardEvents();
+}
+
+// Update platform selection without full re-render
+function updatePlatformSelection(newPlatform) {
+  const oldPlatform = selectedPlatform;
+  selectedPlatform = newPlatform;
+
+  // Update platform option visual states
+  document.querySelectorAll('.platform-option').forEach(opt => {
+    if (opt.dataset.platform === newPlatform) {
+      opt.classList.add('selected');
+    } else {
+      opt.classList.remove('selected');
+    }
+  });
+
+  // Handle shipping field visibility
+  const modalContent = document.querySelector('.modal-content');
+  const existingShippingField = document.querySelector('.shipping-field');
+  const summaryBox = document.querySelector('.modal-content .summary-box');
+
+  if (newPlatform === 'ebay' && !existingShippingField && summaryBox) {
+    // Add shipping field before summary box
+    const shippingDiv = document.createElement('div');
+    shippingDiv.className = 'form-group shipping-field';
+    shippingDiv.innerHTML = `
+      <label class="form-label">Shipping Cost ($)</label>
+      <input type="number" class="form-input" id="shipping-cost" placeholder="0.00" step="0.01" min="0" value="${shippingCost}" inputmode="decimal" />
+    `;
+    summaryBox.before(shippingDiv);
+
+    // Attach event listener to new shipping input
+    document.getElementById('shipping-cost')?.addEventListener('input', (e) => {
+      shippingCost = e.target.value;
+      updateSummaryBox();
+    });
+  } else if (newPlatform !== 'ebay' && existingShippingField) {
+    // Remove shipping field
+    existingShippingField.remove();
+    shippingCost = '';
+  }
+
+  // Update summary calculations
+  updateSummaryBox();
+}
+
 // Update just the summary box without re-rendering the entire page
 function updateSummaryBox() {
   const lot = getLots().find(l => l.id === selectedLotId);
@@ -354,15 +443,8 @@ export function closeSaleModal() {
 }
 
 
-export function initInventoryEvents() {
-  // Tab switching
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', (e) => {
-      activeTab = e.target.dataset.tab;
-      window.dispatchEvent(new CustomEvent('viewchange'));
-    });
-  });
-
+// Event handlers specific to lot cards (called after lot list updates)
+function initLotCardEvents() {
   // Toggle sales list
   document.querySelectorAll('.toggle-sales').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -408,6 +490,19 @@ export function initInventoryEvents() {
       }
     });
   });
+}
+
+export function initInventoryEvents() {
+  // Tab switching - targeted update only
+  document.querySelectorAll('.tabs .tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      activeTab = e.target.dataset.tab;
+      updateLotList();
+    });
+  });
+
+  // Initialize lot card specific events
+  initLotCardEvents();
 
   // Modal events
   document.getElementById('close-modal')?.addEventListener('click', closeSaleModal);
@@ -433,11 +528,10 @@ export function initInventoryEvents() {
     updateSummaryBox();
   });
 
-  // Platform selection - need full re-render to show/hide shipping field
+  // Platform selection - targeted update only
   document.querySelectorAll('.platform-option').forEach(option => {
     option.addEventListener('click', () => {
-      selectedPlatform = option.dataset.platform;
-      window.dispatchEvent(new CustomEvent('viewchange'));
+      updatePlatformSelection(option.dataset.platform);
     });
   });
 
@@ -460,3 +554,4 @@ export function initInventoryEvents() {
     }
   });
 }
+

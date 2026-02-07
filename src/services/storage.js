@@ -127,9 +127,10 @@ export function updateLot(id, updates) {
  * @param {number} unitsSold - Number of units being sold
  * @param {string} platform - 'facebook' or 'ebay'
  * @param {number} shippingCost - Shipping cost in dollars (for eBay)
+ * @param {string} saleDateStr - Optional sale date in YYYY-MM-DD format
  * @returns {Object|null} Updated lot or null if not found
  */
-export function recordSale(id, pricePerUnit, unitsSold, platform, shippingCost = 0) {
+export function recordSale(id, pricePerUnit, unitsSold, platform, shippingCost = 0, saleDateStr = null) {
     const lot = getLotById(id);
     if (!lot) return null;
     if (unitsSold > lot.remaining) return null;
@@ -152,7 +153,7 @@ export function recordSale(id, pricePerUnit, unitsSold, platform, shippingCost =
         shippingCost: shippingCostCents,
         costBasis,
         profit,
-        dateSold: new Date().toISOString()
+        dateSold: saleDateStr ? new Date(saleDateStr + 'T12:00:00').toISOString() : new Date().toISOString()
     };
 
     const updatedSales = [...(lot.sales || []), saleRecord];
@@ -196,6 +197,72 @@ export function deleteSale(lotId, saleId) {
         remaining: updatedRemaining,
         sales: updatedSales
     });
+}
+
+/**
+ * Update a specific sale record
+ * @param {string} lotId - Lot ID
+ * @param {string} saleId - Sale record ID
+ * @param {Object} updates - Fields to update (e.g., { dateSold })
+ * @returns {Object|null} Updated lot or null
+ */
+export function updateSale(lotId, saleId, updates) {
+    const data = getStorageData();
+    const lotIndex = data.lots.findIndex(l => l.id === lotId);
+
+    if (lotIndex === -1) return null;
+    const lot = data.lots[lotIndex];
+
+    const saleIndex = lot.sales.findIndex(s => s.id === saleId);
+    if (saleIndex === -1) return null;
+
+    lot.sales[saleIndex] = { ...lot.sales[saleIndex], ...updates };
+    saveStorageData(data);
+    return lot;
+}
+
+/**
+ * Get all sales from all lots
+ * @returns {Array} Array of { lot, sale } objects
+ */
+export function getAllSales() {
+    const lots = getLots();
+    const allSales = [];
+
+    for (const lot of lots) {
+        if (!lot.sales) continue;
+        for (const sale of lot.sales) {
+            allSales.push({ lot, sale });
+        }
+    }
+
+    return allSales;
+}
+
+/**
+ * Get all sales within a date range
+ * @param {Date} startDate - Start of range (inclusive)
+ * @param {Date|null} endDate - End of range (inclusive), null for no end limit
+ * @returns {Array} Array of { lot, sale } objects
+ */
+export function getSalesByDateRange(startDate, endDate = null) {
+    const lots = getLots();
+    const salesInRange = [];
+
+    const startTime = startDate.getTime();
+    const endTime = endDate ? endDate.getTime() : Infinity;
+
+    for (const lot of lots) {
+        if (!lot.sales) continue;
+        for (const sale of lot.sales) {
+            const saleTime = new Date(sale.dateSold).getTime();
+            if (saleTime >= startTime && saleTime <= endTime) {
+                salesInRange.push({ lot, sale });
+            }
+        }
+    }
+
+    return salesInRange;
 }
 
 /**

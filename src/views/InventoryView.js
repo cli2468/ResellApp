@@ -1,6 +1,6 @@
 // Inventory View - List all lots with sale recording
 
-import { getLots, recordSale, deleteLot, isFullySold, hasSales, getLotTotalProfit, deleteSale, getReturnDeadline, getDaysUntilReturn } from '../services/storage.js';
+import { getLots, recordSale, deleteLot, isFullySold, hasSales, getLotTotalProfit, deleteSale, updateSale, getReturnDeadline, getDaysUntilReturn } from '../services/storage.js';
 import { formatCurrency, formatDate, PLATFORM_FEES, calculateSaleProfit } from '../services/calculations.js';
 
 let activeTab = 'all';
@@ -10,6 +10,7 @@ let unitsSold = '1';
 let selectedPlatform = 'facebook';
 let expandedLots = new Set();
 let shippingCost = '';
+let saleDate = new Date().toISOString().split('T')[0]; // Default to today
 
 export function setActiveTab(tab) {
   activeTab = tab;
@@ -133,11 +134,16 @@ function renderLotCard(lot) {
 function renderSalesList(lot) {
   return `
     <div class="sales-list" style="margin-top: var(--spacing-md); border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: var(--spacing-sm);">
-      ${lot.sales.map(sale => `
+      ${lot.sales.map(sale => {
+    const saleDateValue = new Date(sale.dateSold).toISOString().split('T')[0];
+    return `
         <div class="sale-item" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 0.875rem; border-bottom: 1px solid rgba(255, 255, 255, 0.03);">
           <div>
             <div style="font-weight: 500;">Sold ${sale.unitsSold} on ${sale.platform === 'ebay' ? 'eBay' : 'Facebook'}</div>
-            <div class="text-muted" style="font-size: 0.75rem;">${formatDate(sale.dateSold, 'short')} • @ ${formatCurrency(sale.pricePerUnit)}</div>
+            <div class="sale-date-edit text-muted" style="font-size: 0.75rem;">
+              <input type="date" class="sale-date-input edit-sale-date" data-lot-id="${lot.id}" data-sale-id="${sale.id}" value="${saleDateValue}" />
+              <span>• @ ${formatCurrency(sale.pricePerUnit)}</span>
+            </div>
           </div>
           <div style="text-align: right; display: flex; align-items: center; gap: 12px;">
             <div class="${sale.profit >= 0 ? 'text-success' : 'text-danger'}" style="font-weight: 600;">
@@ -153,7 +159,8 @@ function renderSalesList(lot) {
             </button>
           </div>
         </div>
-      `).join('')}
+      `;
+  }).join('')}
     </div>
   `;
 }
@@ -245,6 +252,11 @@ function renderSaleModal() {
         </div>
         
         ${shippingFieldHtml}
+        
+        <div class="form-group">
+          <label class="form-label">Sale Date</label>
+          <input type="date" class="form-input" id="sale-date" value="${saleDate}" />
+        </div>
         
         <div class="summary-box">
           <div class="summary-row">
@@ -431,6 +443,7 @@ export function openSaleModal(lotId) {
   unitsSold = '1';
   selectedPlatform = 'facebook';
   shippingCost = '';
+  saleDate = new Date().toISOString().split('T')[0];
   window.dispatchEvent(new CustomEvent('viewchange'));
 }
 
@@ -439,6 +452,7 @@ export function closeSaleModal() {
   salePrice = '';
   unitsSold = '1';
   shippingCost = '';
+  saleDate = new Date().toISOString().split('T')[0];
   window.dispatchEvent(new CustomEvent('viewchange'));
 }
 
@@ -490,6 +504,18 @@ function initLotCardEvents() {
       }
     });
   });
+
+  // Edit sale date inline
+  document.querySelectorAll('.edit-sale-date').forEach(input => {
+    input.addEventListener('change', (e) => {
+      e.stopPropagation();
+      const { lotId, saleId } = e.target.dataset;
+      const newDate = e.target.value;
+      if (newDate) {
+        updateSale(lotId, saleId, { dateSold: new Date(newDate + 'T12:00:00').toISOString() });
+      }
+    });
+  });
 }
 
 export function initInventoryEvents() {
@@ -528,6 +554,11 @@ export function initInventoryEvents() {
     updateSummaryBox();
   });
 
+  // Sale date input
+  document.getElementById('sale-date')?.addEventListener('change', (e) => {
+    saleDate = e.target.value;
+  });
+
   // Platform selection - targeted update only
   document.querySelectorAll('.platform-option').forEach(option => {
     option.addEventListener('click', () => {
@@ -541,7 +572,7 @@ export function initInventoryEvents() {
     const units = parseInt(unitsSold) || 1;
     const shipping = selectedPlatform === 'ebay' ? (parseFloat(shippingCost) || 0) : 0;
     if (price > 0 && units > 0 && selectedLotId) {
-      recordSale(selectedLotId, price, units, selectedPlatform, shipping);
+      recordSale(selectedLotId, price, units, selectedPlatform, shipping, saleDate);
       closeSaleModal();
     }
   });

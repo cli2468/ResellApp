@@ -6,6 +6,9 @@ import { DashboardView, initDashboardEvents } from './views/DashboardView.js';
 import { InventoryView, initInventoryEvents } from './views/InventoryView.js';
 import { AddLotView, initAddLotEvents } from './views/AddLotView.js';
 import { BottomNav, initBottomNavEvents } from './components/BottomNav.js';
+import { LoginModal, initLoginModalEvents } from './components/LoginModal.js';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from './services/firebase.js';
 
 // Get current route from hash
 function getCurrentRoute() {
@@ -15,15 +18,16 @@ function getCurrentRoute() {
 
 // Render the full app layout
 function renderApp(viewContent, activeRoute) {
-  return viewContent + BottomNav(activeRoute);
+  return viewContent + BottomNav(activeRoute) + LoginModal();
 }
 
 // Initialize event handlers for current view
 function initEvents() {
   const currentRoute = getCurrentRoute();
 
-  // Always init bottom nav
+  // Always init global components
   initBottomNavEvents();
+  initLoginModalEvents();
 
   // Route-specific events
   switch (currentRoute) {
@@ -71,6 +75,11 @@ window.addEventListener('viewchange', () => {
     app.innerHTML = renderApp(content, currentRoute);
     initEvents();
   }
+});
+
+// Handle Firebase Auth state changes globally to re-render
+onAuthStateChanged(auth, () => {
+  window.dispatchEvent(new CustomEvent('viewchange'));
 });
 
 // Register service worker (handled by vite-plugin-pwa)

@@ -3,6 +3,9 @@
 const STORAGE_KEY = 'reselltracker_data';
 const STORAGE_VERSION = 2; // Bumped for per-unit cost changes
 
+import { saveLotToCloud, deleteLotFromCloud } from './firebaseSync.js';
+import { auth } from './firebase.js';
+
 /**
  * Get the current storage data structure
  */
@@ -64,6 +67,16 @@ export function getLots() {
 }
 
 /**
+ * Overwrite all lots (used for cloud sync)
+ * @param {Array} lots - New array of lots
+ */
+export function setLots(lots) {
+    const data = getStorageData();
+    data.lots = lots;
+    saveStorageData(data);
+}
+
+/**
  * Get a single lot by ID
  * @param {string} id - Lot ID
  * @returns {Object|null} Lot object or null
@@ -100,6 +113,12 @@ export function saveLot(lotData) {
 
     data.lots.unshift(newLot);
     saveStorageData(data);
+
+    // Cloud sync
+    if (auth.currentUser) {
+        saveLotToCloud(newLot);
+    }
+
     return newLot;
 }
 
@@ -117,6 +136,12 @@ export function updateLot(id, updates) {
 
     data.lots[index] = { ...data.lots[index], ...updates };
     saveStorageData(data);
+
+    // Cloud sync
+    if (auth.currentUser) {
+        saveLotToCloud(data.lots[index]);
+    }
+
     return data.lots[index];
 }
 
@@ -278,6 +303,12 @@ export function deleteLot(id) {
 
     data.lots.splice(index, 1);
     saveStorageData(data);
+
+    // Cloud sync
+    if (auth.currentUser) {
+        deleteLotFromCloud(id);
+    }
+
     return true;
 }
 

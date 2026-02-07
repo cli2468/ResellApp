@@ -705,9 +705,13 @@ async function processCSVFile(file) {
   resultEl.innerHTML = '<p class="text-muted">Importing...</p>';
 
   try {
-    const { success, errors } = await importLotsFromCSV(file);
+    const { success, salesImported, errors } = await importLotsFromCSV(file);
 
-    let html = `<div class="import-success">✅ Imported ${success} lot${success !== 1 ? 's' : ''} successfully</div>`;
+    let html = `<div class="import-success">✅ Imported ${success} lot${success !== 1 ? 's' : ''}`;
+    if (salesImported > 0) {
+      html += ` with ${salesImported} sale${salesImported !== 1 ? 's' : ''}`;
+    }
+    html += `</div>`;
 
     if (errors.length > 0) {
       html += `<div class="import-errors" style="margin-top: var(--spacing-md); color: var(--accent-warning);">

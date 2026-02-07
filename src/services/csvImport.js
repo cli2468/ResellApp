@@ -1,6 +1,6 @@
 // CSV Import Service - Parse and import lots from CSV files
 
-import { saveLot, recordSale } from './storage.js';
+import { saveLot, recordSale, getLots } from './storage.js';
 
 /**
  * Parse CSV text into array of objects
@@ -12,17 +12,17 @@ export function parseCSV(csvText) {
     if (lines.length < 2) return [];
 
     // Parse header row
-    const headers = parseCSVRow(lines[0]).map(h => h.toLowerCase().trim());
+    const headers = parseCSVRow(lines[0]).map(h => h.toLowerCase().trim().replace(/\s+/g, '_'));
 
     // Parse data rows
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
         const values = parseCSVRow(lines[i]);
-        if (values.length === 0) continue;
+        if (values.length === 0 || values.every(v => !v.trim())) continue;
 
         const row = {};
         headers.forEach((header, index) => {
-            row[header] = values[index] || '';
+            row[header] = values[index]?.trim() || '';
         });
         rows.push(row);
     }
@@ -61,16 +61,20 @@ function parseCSVRow(line) {
 }
 
 /**
- * Import lots from CSV file
- * Expected columns: name, cost, quantity, purchase_date (optional)
+ * Import lots (and optionally sales) from CSV file
+ * Supports multiple formats:
+ * - Simple: name, cost, quantity, purchase_date
+ * - With sales: product_name, cost_price, quantity_purchased, date_purchased, 
+ *               cash (FB sale), sale_price (eBay), shipping_fees, qty_sold, date_sold
  * @param {File} file - CSV file
- * @returns {Promise<{success: number, errors: Array}>}
+ * @returns {Promise<{success: number, salesImported: number, errors: Array}>}
  */
 export async function importLotsFromCSV(file) {
     const text = await file.text();
     const rows = parseCSV(text);
 
-    let success = 0;
+    let lotsImported = 0;
+    let salesImported = 0;
     const errors = [];
 
     for (let i = 0; i < rows.length; i++) {
@@ -78,14 +82,14 @@ export async function importLotsFromCSV(file) {
 
         try {
             // Find name column (flexible naming)
-            const name = row.name || row.item || row.product || row.description || '';
+            const name = row.product_name || row.name || row.item || row.product || row.description || '';
             if (!name) {
-                errors.push(`Row ${i + 2}: Missing name`);
+                errors.push(`Row ${i + 2}: Missing product name`);
                 continue;
             }
 
             // Find cost column
-            const costStr = row.cost || row.price || row.total || row.amount || '0';
+            const costStr = row.cost_price || row.cost || row.price || row.total || row.amount || '0';
             const cost = parseFloat(costStr.replace(/[$,]/g, ''));
             if (isNaN(cost) || cost < 0) {
                 errors.push(`Row ${i + 2}: Invalid cost "${costStr}"`);
@@ -93,56 +97,100 @@ export async function importLotsFromCSV(file) {
             }
 
             // Find quantity column
-            const quantityStr = row.quantity || row.qty || row.units || '1';
+            const quantityStr = row.quantity_purchased || row.quantity || row.qty || row.units || '1';
             const quantity = parseInt(quantityStr) || 1;
 
             // Find purchase date column
-            const dateStr = row.purchase_date || row.date || row.purchased || '';
+            const purchaseDateStr = row.date_purchased || row.purchase_date || row.date || row.purchased || '';
             let purchaseDate = new Date().toISOString().split('T')[0];
-            if (dateStr) {
-                const parsed = parseDate(dateStr);
+            if (purchaseDateStr) {
+                const parsed = parseDate(purchaseDateStr);
                 if (parsed) purchaseDate = parsed;
             }
 
             // Save the lot
-            saveLot({
+            const newLot = saveLot({
                 name,
                 cost,
                 quantity,
                 purchaseDate
             });
 
-            success++;
+            lotsImported++;
+
+            // Check for sale data - either Cash (Facebook) or Sale Price (eBay)
+            const cashStr = row.cash || '';
+            const salePriceStr = row.sale_price || '';
+            const qtySoldStr = row.qty_sold || row.quantity_sold || '';
+            const dateSoldStr = row.date_sold || '';
+            const shippingStr = row.shipping_fees || row.shipping || '';
+
+            const cashPrice = parseFloat(cashStr.replace(/[$,]/g, '')) || 0;
+            const ebayPrice = parseFloat(salePriceStr.replace(/[$,]/g, '')) || 0;
+            const qtySold = parseInt(qtySoldStr) || 0;
+            const shippingFees = parseFloat(shippingStr.replace(/[$,]/g, '')) || 0;
+
+            // Parse sale date
+            let saleDate = null;
+            if (dateSoldStr) {
+                saleDate = parseDate(dateSoldStr);
+            }
+
+            // If there's a sale, record it
+            if (qtySold > 0 && (cashPrice > 0 || ebayPrice > 0)) {
+                if (cashPrice > 0) {
+                    // Facebook sale
+                    recordSale(newLot.id, cashPrice, qtySold, 'facebook', 0, saleDate);
+                    salesImported++;
+                } else if (ebayPrice > 0) {
+                    // eBay sale
+                    recordSale(newLot.id, ebayPrice, qtySold, 'ebay', shippingFees, saleDate);
+                    salesImported++;
+                }
+            }
+
         } catch (e) {
             errors.push(`Row ${i + 2}: ${e.message}`);
         }
     }
 
-    return { success, errors };
+    return { success: lotsImported, salesImported, errors };
 }
 
 /**
  * Parse various date formats
  */
 function parseDate(dateStr) {
+    if (!dateStr) return null;
+
+    // Normalize the string
+    dateStr = dateStr.trim();
+
     // Try common formats
     const formats = [
-        /^(\d{4})-(\d{1,2})-(\d{1,2})$/,  // YYYY-MM-DD
-        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, // MM/DD/YYYY
-        /^(\d{1,2})-(\d{1,2})-(\d{4})$/,   // MM-DD-YYYY
+        /^(\d{4})-(\d{1,2})-(\d{1,2})$/,       // YYYY-MM-DD
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,     // MM/DD/YYYY
+        /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,     // MM/DD/YY
+        /^(\d{1,2})-(\d{1,2})-(\d{4})$/,       // MM-DD-YYYY
+        /^(\d{1,2})-(\d{1,2})-(\d{2})$/,       // MM-DD-YY
     ];
 
-    for (const format of formats) {
-        const match = dateStr.match(format);
+    for (let i = 0; i < formats.length; i++) {
+        const match = dateStr.match(formats[i]);
         if (match) {
             try {
                 let year, month, day;
-                if (format === formats[0]) {
+                if (i === 0) {
+                    // YYYY-MM-DD
                     [, year, month, day] = match;
                 } else {
+                    // MM/DD/YY or MM/DD/YYYY
                     [, month, day, year] = match;
+                    if (year.length === 2) {
+                        year = parseInt(year) > 50 ? '19' + year : '20' + year;
+                    }
                 }
-                const date = new Date(year, month - 1, day);
+                const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
                 if (!isNaN(date.getTime())) {
                     return date.toISOString().split('T')[0];
                 }
@@ -169,8 +217,8 @@ function parseDate(dateStr) {
  * Generate a sample CSV template
  */
 export function generateCSVTemplate() {
-    return `name,cost,quantity,purchase_date
-"Example Item 1",25.99,5,2024-01-15
-"Example Item 2",10.50,10,2024-01-20
-"Multi-pack Bundle",45.00,3,2024-02-01`;
+    return `product_name,cost_price,quantity_purchased,date_purchased,cash,sale_price,shipping_fees,qty_sold,date_sold
+"Example Facebook Sale",25.99,5,1/15/2024,35.00,,0,2,1/20/2024
+"Example eBay Sale",10.50,10,1/20/2024,,18.99,3.50,3,1/25/2024
+"Unsold Item",45.00,3,2/1/2024,,,,,`;
 }

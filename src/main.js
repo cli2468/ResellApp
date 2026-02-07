@@ -82,8 +82,4 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Initialize pull-to-refresh
-import { initPullToRefresh } from './services/pullToRefresh.js';
-initPullToRefresh();
-
 console.log('🚀 ResellTracker initialized');

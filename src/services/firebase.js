@@ -21,10 +21,15 @@ let auth;
 let db;
 let googleProvider;
 let firebaseEnabled = false;
+let firebaseInitErrorMessage = '';
 
 try {
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'your_api_key_here') {
-        throw new Error('Firebase API Key is missing or default. Live features will be disabled.');
+    const missingKeys = Object.entries(firebaseConfig)
+        .filter(([, value]) => !value || value === 'your_api_key_here')
+        .map(([key]) => key);
+
+    if (missingKeys.length > 0) {
+        throw new Error(`Missing Firebase config: ${missingKeys.join(', ')}`);
     }
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
@@ -33,6 +38,7 @@ try {
     firebaseEnabled = true;
     console.log('✅ Firebase initialized successfully.');
 } catch (error) {
+    firebaseInitErrorMessage = error?.message || 'Firebase failed to initialize.';
     console.warn('⚠️ Firebase initialization skipped:', error.message);
     // Export nulls or mocks to prevent top-level crashes
     app = null;
@@ -48,10 +54,11 @@ try {
     googleProvider = null;
 }
 
-export { auth, db, firebaseEnabled };
+export { auth, db, firebaseEnabled, firebaseInitErrorMessage };
 
 function createFirebaseConfigError() {
-    const error = new Error('Cloud sync is not configured for this build. Add Firebase env vars to enable Google sign-in.');
+    const detail = firebaseInitErrorMessage || 'Unknown Firebase initialization error.';
+    const error = new Error(`Cloud sync is not configured for this build. ${detail}`);
     error.code = 'auth/not-configured';
     return error;
 }

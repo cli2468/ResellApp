@@ -11,6 +11,19 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase.js';
 
+async function ensureUserDoc(user) {
+    if (!user || !db) return null;
+
+    const userRef = doc(db, 'users', user.uid);
+    await setDoc(userRef, {
+        email: user.email || '',
+        displayName: user.displayName || '',
+        updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    return userRef;
+}
+
 function getUserCollectionRef(collectionName) {
     const user = auth.currentUser;
     if (!user || !db) return null;
@@ -41,6 +54,7 @@ async function saveDocumentToCloud(collectionName, item) {
     const user = auth.currentUser;
     if (!user || !db || !item?.id) return;
 
+    await ensureUserDoc(user);
     const recordRef = doc(db, 'users', user.uid, collectionName, item.id);
     await setDoc(recordRef, {
         ...item,
@@ -63,6 +77,7 @@ async function uploadCollectionData(collectionName, items) {
     const user = auth.currentUser;
     if (!user || !db) return;
 
+    await ensureUserDoc(user);
     const batch = writeBatch(db);
 
     items.forEach((item) => {

@@ -7,6 +7,7 @@ import { DashboardView, initDashboardEvents } from './views/DashboardView.js';
 import { InventoryView, initInventoryEvents } from './views/InventoryView.js';
 import { AddLotView, initAddLotEvents, initMobileAddLotEvents } from './views/AddLotView.js';
 import { SalesView, initSalesEvents } from './views/SalesView.js';
+import { ChurningView, initChurningEvents } from './views/ChurningView.js';
 import { BottomNav, initBottomNavEvents } from './components/BottomNav.js';
 import { Sidebar, initSidebarEvents, toggleSidebar, isSidebarCollapsed, updateSidebarAuthState } from './components/Sidebar.js';
 import { DesktopDashboardView, initDesktopDashboardEvents } from './views/DesktopDashboardView.js';
@@ -59,6 +60,9 @@ function initEvents() {
       case '/sales':
         initSalesEvents();
         break;
+      case '/churning':
+        initChurningEvents();
+        break;
     }
   }
 
@@ -72,6 +76,7 @@ function initEvents() {
 // Use getViewContent() to handle desktop vs mobile layout
 route('/', () => getViewContent('/'));
 route('/inventory', () => getViewContent('/inventory'));
+route('/churning', () => getViewContent('/churning'));
 route('/add', () => getViewContent('/add'));
 route('/sales', () => getViewContent('/sales'));
 
@@ -135,6 +140,8 @@ function getViewContent(currentRoute) {
       return DashboardView();
     case '/inventory':
       return InventoryView();
+    case '/churning':
+      return ChurningView();
     case '/add':
       return AddLotView();
     case '/sales':

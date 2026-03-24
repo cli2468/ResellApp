@@ -1,5 +1,5 @@
-import { getAllSales, getSalesByDateRange, getLots, getLotTotalProfit } from '../services/storage.js';
-import { calculateMonthlyStats, formatCurrency } from '../services/calculations.js';
+import { getAllSales, getSalesByDateRange, getLots, getLotTotalProfit, getChurningOrders } from '../services/storage.js';
+import { calculateMonthlyStats, formatCurrency, calculateChurningStats, getChurningOrdersForMonth } from '../services/calculations.js';
 import { aggregateSalesByDay, aggregateSalesForChart } from '../services/chartData.js';
 import { renderPlatformBadge } from '../services/uiHelpers.js';
 import { navigate } from '../router.js';
@@ -124,6 +124,11 @@ export function DesktopDashboardView() {
     },
   ];
 
+  const churningOrders = getChurningOrders();
+  const currentMonthChurning = getChurningOrdersForMonth(churningOrders);
+  const churningStats = calculateChurningStats(currentMonthChurning);
+  const overallChurningStats = calculateChurningStats(churningOrders);
+
   const recentSales = [...salesData]
     .sort((a, b) => {
       const dateA = a.sale?.dateSold ? new Date(a.sale.dateSold) : new Date(0);
@@ -181,6 +186,9 @@ export function DesktopDashboardView() {
       <div class="dashboard-bottom-row">
         <div class="bottom-card">
           ${renderTopPerformersPanel(allLots)}
+        </div>
+        <div class="bottom-card">
+          ${renderChurningSnapshot(churningStats, overallChurningStats)}
         </div>
         <div class="bottom-card">
           ${renderRecentSalesCard(recentSales, allLots)}
@@ -444,6 +452,46 @@ function renderTopPerformersPanel(lots) {
     <div class="tp-list">
       <div class="tp-podium">${podiumHtml}</div>
       ${rest.length > 0 ? `<div class="tp-compact-list">${restHtml}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderChurningSnapshot(monthStats, overallStats) {
+  const header = `
+    <div class="section-header">
+      <h3 class="section-title">Churning</h3>
+    </div>`;
+
+  if (overallStats.orderCount === 0) {
+    return `${header}<p class="bottom-card-empty">No churning orders logged yet.</p>`;
+  }
+
+  return `
+    ${header}
+    <div class="desktop-churn-summary">
+      <div class="desktop-churn-hero">
+        <span class="desktop-churn-label">This Month</span>
+        <div class="desktop-churn-value ${monthStats.totalProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(monthStats.totalProfit, true)}</div>
+        <div class="desktop-churn-meta">${monthStats.orderCount} order${monthStats.orderCount === 1 ? '' : 's'} across this month.</div>
+      </div>
+      <div class="desktop-churn-grid">
+        <div class="desktop-churn-cell">
+          <span>Awaiting tracking</span>
+          <strong>${overallStats.pendingTrackingCount}</strong>
+        </div>
+        <div class="desktop-churn-cell">
+          <span>Awaiting payment</span>
+          <strong>${overallStats.pendingPaymentCount}</strong>
+        </div>
+        <div class="desktop-churn-cell">
+          <span>Tracking overdue</span>
+          <strong>${overallStats.trackingOverdueCount}</strong>
+        </div>
+        <div class="desktop-churn-cell">
+          <span>Cash tied up</span>
+          <strong>${formatCurrency(overallStats.outstandingPurchaseVolume)}</strong>
+        </div>
+      </div>
     </div>
   `;
 }

@@ -197,3 +197,144 @@ export function calculateROI(costInCents, profitInCents) {
     if (costInCents === 0) return 0;
     return Math.round((profitInCents / costInCents) * 100);
 }
+
+/**
+ * Calculate cashback earned on a purchase amount.
+ * @param {number} purchaseAmountCents - Purchase amount in cents
+ * @param {number} cashbackRate - Cashback rate as a whole-number percent (e.g. 5 for 5%)
+ * @returns {number} Cashback amount in cents
+ */
+export function calculateCashbackValue(purchaseAmountCents, cashbackRate = 0) {
+    const purchaseAmount = Number(purchaseAmountCents) || 0;
+    const rate = Number(cashbackRate) || 0;
+    return Math.round(purchaseAmount * (rate / 100));
+}
+
+/**
+ * Calculate churning profit from reimbursement delta plus cashback.
+ * @param {number} purchaseAmountCents - Purchase amount in cents
+ * @param {number} reimbursementAmountCents - Reimbursement amount in cents
+ * @param {number} cashbackRate - Cashback rate as a whole-number percent
+ * @returns {number} Profit in cents
+ */
+export function calculateChurningProfit(purchaseAmountCents, reimbursementAmountCents, cashbackRate = 0) {
+    const purchaseAmount = Number(purchaseAmountCents) || 0;
+    const reimbursementAmount = Number(reimbursementAmountCents) || 0;
+    const cashbackAmount = calculateCashbackValue(purchaseAmount, cashbackRate);
+
+    return reimbursementAmount - purchaseAmount + cashbackAmount;
+}
+
+function parseLocalDate(dateValue) {
+    if (!dateValue) return null;
+
+    const normalized = typeof dateValue === 'string' && !dateValue.includes('T')
+        ? `${dateValue}T12:00:00`
+        : dateValue;
+
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Determine whether an order has missed the 3-day tracking upload window.
+ * @param {Object} order - Churning order
+ * @param {number} graceDays - Allowed days before flagging
+ * @returns {boolean}
+ */
+export function isChurningTrackingOverdue(order, graceDays = 3) {
+    if (!order || order.trackingUploaded) return false;
+
+    const purchaseDate = parseLocalDate(order.purchaseDate);
+    if (!purchaseDate) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    purchaseDate.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.floor((today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays > graceDays;
+}
+
+/**
+ * Filter churning orders to the month of the provided date.
+ * @param {Array} orders - Churning orders
+ * @param {Date} targetDate - Reference date
+ * @returns {Array}
+ */
+export function getChurningOrdersForMonth(orders, targetDate = new Date()) {
+    if (!Array.isArray(orders)) return [];
+
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+
+    return orders.filter((order) => {
+        const purchaseDate = parseLocalDate(order?.purchaseDate);
+        return purchaseDate
+            && purchaseDate.getFullYear() === year
+            && purchaseDate.getMonth() === month;
+    });
+}
+
+/**
+ * Aggregate churning orders into summary statistics.
+ * @param {Array} orders - Churning orders
+ * @returns {Object}
+ */
+export function calculateChurningStats(orders) {
+    const stats = {
+        orderCount: 0,
+        totalPurchaseVolume: 0,
+        totalReimbursement: 0,
+        totalCashback: 0,
+        totalProfit: 0,
+        pendingTrackingCount: 0,
+        trackingOverdueCount: 0,
+        deliveredCount: 0,
+        paidCount: 0,
+        pendingPaymentCount: 0,
+        outstandingPurchaseVolume: 0
+    };
+
+    if (!Array.isArray(orders)) return stats;
+
+    orders.forEach((order) => {
+        if (!order) return;
+
+        const purchaseAmount = Number(order.purchaseAmount) || 0;
+        const reimbursementAmount = Number(order.reimbursementAmount) || 0;
+        const cashbackAmount = Number.isFinite(Number(order.cashbackAmount))
+            ? Number(order.cashbackAmount)
+            : calculateCashbackValue(purchaseAmount, order.cashbackRate);
+        const profit = Number.isFinite(Number(order.profit))
+            ? Number(order.profit)
+            : calculateChurningProfit(purchaseAmount, reimbursementAmount, order.cashbackRate);
+
+        stats.orderCount += 1;
+        stats.totalPurchaseVolume += purchaseAmount;
+        stats.totalReimbursement += reimbursementAmount;
+        stats.totalCashback += cashbackAmount;
+        stats.totalProfit += profit;
+
+        if (!order.trackingUploaded) {
+            stats.pendingTrackingCount += 1;
+        }
+
+        if (isChurningTrackingOverdue(order)) {
+            stats.trackingOverdueCount += 1;
+        }
+
+        if (order.delivered) {
+            stats.deliveredCount += 1;
+        }
+
+        if (order.paid) {
+            stats.paidCount += 1;
+        } else {
+            stats.pendingPaymentCount += 1;
+            stats.outstandingPurchaseVolume += purchaseAmount;
+        }
+    });
+
+    return stats;
+}

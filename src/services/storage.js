@@ -1,11 +1,98 @@
 // Storage Service - localStorage wrapper with data persistence
 
 const STORAGE_KEY = 'reselltracker_data';
-const STORAGE_VERSION = 2; // Bumped for per-unit cost changes
+const STORAGE_VERSION = 3; // Adds churning cards + orders
 
-import { saveLotToCloud, deleteLotFromCloud } from './firebaseSync.js';
+import {
+    saveLotToCloud,
+    deleteLotFromCloud,
+    saveChurningOrderToCloud,
+    deleteChurningOrderFromCloud,
+    saveChurnCardToCloud,
+    deleteChurnCardFromCloud
+} from './firebaseSync.js';
 import { auth } from './firebase.js';
-import { generateDemoData } from './demoData.js';
+import { generateDemoData, generateDemoChurningCards, generateDemoChurningOrders } from './demoData.js';
+import { calculateCashbackValue, calculateChurningProfit } from './calculations.js';
+
+function createEmptyStorageData() {
+    return {
+        version: STORAGE_VERSION,
+        lots: [],
+        churnCards: [],
+        churningOrders: []
+    };
+}
+
+function createDemoStorageData() {
+    const cards = generateDemoChurningCards();
+
+    return {
+        version: STORAGE_VERSION,
+        lots: generateDemoData(),
+        churnCards: cards,
+        churningOrders: generateDemoChurningOrders(cards)
+    };
+}
+
+function normalizeStorageData(data) {
+    if (!data || typeof data !== 'object') {
+        return createEmptyStorageData();
+    }
+
+    if (!Array.isArray(data.lots)) {
+        data.lots = [];
+    }
+
+    // Migration from v1 to v2: add unitCost and remaining
+    if ((data.version || 1) < 2) {
+        data.lots = data.lots.map(lot => ({
+            ...lot,
+            unitCost: lot.unitCost || lot.cost,
+            totalCost: lot.cost,
+            remaining: lot.sale ? 0 : (lot.quantity || 1),
+            sales: lot.sale ? [{
+                ...lot.sale,
+                unitsSold: lot.quantity || 1
+            }] : []
+        }));
+    }
+
+    if ((data.version || 1) < 3) {
+        data.churnCards = [];
+        data.churningOrders = [];
+    }
+
+    data.churnCards = Array.isArray(data.churnCards) ? data.churnCards : [];
+    data.churningOrders = Array.isArray(data.churningOrders) ? data.churningOrders : [];
+    data.churnCards = data.churnCards.map((card) => ({
+        ...card,
+        cashbackRate: Math.max(0, Number(card?.cashbackRate) || 0),
+        cashbackType: normalizeCashbackType(card?.cashbackType)
+    }));
+    data.churningOrders = data.churningOrders.map((order) => {
+        const purchaseAmount = Math.max(0, Number(order?.purchaseAmount) || 0);
+        const reimbursementAmount = Math.max(0, Number(order?.reimbursementAmount) || 0);
+        const cashbackRate = Math.max(0, Number(order?.cashbackRate) || 0);
+
+        return {
+            ...order,
+            purchaseAmount,
+            reimbursementAmount,
+            cashbackRate,
+            cashbackType: normalizeCashbackType(order?.cashbackType),
+            cashbackAmount: Number.isFinite(Number(order?.cashbackAmount))
+                ? Number(order.cashbackAmount)
+                : calculateCashbackValue(purchaseAmount, cashbackRate),
+            profit: Number.isFinite(Number(order?.profit))
+                ? Number(order.profit)
+                : calculateChurningProfit(purchaseAmount, reimbursementAmount, cashbackRate)
+        };
+    });
+    data.version = STORAGE_VERSION;
+
+    return data;
+}
 
 /**
  * Get the current storage data structure
@@ -14,9 +101,9 @@ function getStorageData() {
     // Demo Mode Interception
     if (localStorage.getItem('demoMode') === 'true') {
         const demoRaw = localStorage.getItem('resell_demo_lots');
-        if (demoRaw) return JSON.parse(demoRaw);
+        if (demoRaw) return normalizeStorageData(JSON.parse(demoRaw));
 
-        const demoState = { version: STORAGE_VERSION, lots: generateDemoData() };
+        const demoState = createDemoStorageData();
         localStorage.setItem('resell_demo_lots', JSON.stringify(demoState));
         return demoState;
     }
@@ -24,28 +111,20 @@ function getStorageData() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (!raw) {
-            return { version: STORAGE_VERSION, lots: [] };
+            return createEmptyStorageData();
         }
-        const data = JSON.parse(raw);
-        // Migration from v1 to v2: add unitCost and remaining
-        if (data.version < 2) {
-            data.lots = data.lots.map(lot => ({
-                ...lot,
-                unitCost: lot.unitCost || lot.cost, // v1 stored total cost as 'cost'
-                totalCost: lot.cost,
-                remaining: lot.sale ? 0 : (lot.quantity || 1),
-                sales: lot.sale ? [{
-                    ...lot.sale,
-                    unitsSold: lot.quantity || 1
-                }] : []
-            }));
-            data.version = 2;
+
+        const parsed = JSON.parse(raw);
+        const data = normalizeStorageData(parsed);
+
+        if ((parsed.version || 1) !== STORAGE_VERSION) {
             saveStorageData(data);
         }
+
         return data;
     } catch (e) {
         console.error('Failed to read storage:', e);
-        return { version: STORAGE_VERSION, lots: [] };
+        return createEmptyStorageData();
     }
 }
 
@@ -90,6 +169,91 @@ export function setLots(lots) {
     const data = getStorageData();
     data.lots = lots;
     saveStorageData(data);
+}
+
+export function getChurnCards() {
+    return getStorageData().churnCards;
+}
+
+export function setChurnCards(cards) {
+    const data = getStorageData();
+    data.churnCards = Array.isArray(cards) ? cards : [];
+    saveStorageData(data);
+}
+
+export function getChurningOrders() {
+    return getStorageData().churningOrders;
+}
+
+export function setChurningOrders(orders) {
+    const data = getStorageData();
+    data.churningOrders = Array.isArray(orders) ? orders : [];
+    saveStorageData(data);
+}
+
+export function clearAllData() {
+    saveStorageData(createEmptyStorageData());
+}
+
+function normalizeCashbackType(type) {
+    return type === 'points' ? 'points' : 'statement-credit';
+}
+
+function getChurningCardById(cardId) {
+    return getChurnCards().find(card => card.id === cardId) || null;
+}
+
+function buildChurningCardPayload(cardData, existingCard = null) {
+    const now = new Date().toISOString();
+
+    return {
+        id: existingCard?.id || generateId(),
+        name: (cardData.name || existingCard?.name || 'Untitled Card').trim(),
+        cashbackRate: Math.max(0, Number(cardData.cashbackRate ?? existingCard?.cashbackRate) || 0),
+        cashbackType: normalizeCashbackType(cardData.cashbackType ?? existingCard?.cashbackType),
+        createdAt: existingCard?.createdAt || now,
+        updatedAt: now
+    };
+}
+
+function buildChurningOrderPayload(orderData, existingOrder = null) {
+    const resolvedCardId = orderData.cardId ?? existingOrder?.cardId ?? null;
+    const selectedCard = resolvedCardId ? getChurningCardById(resolvedCardId) : null;
+    const fallbackSnapshot = existingOrder || {};
+    const cashbackRate = Number(selectedCard?.cashbackRate ?? fallbackSnapshot.cashbackRate) || 0;
+    const cashbackType = normalizeCashbackType(selectedCard?.cashbackType ?? fallbackSnapshot.cashbackType);
+    const purchaseAmount = Math.max(0, Number(orderData.purchaseAmount ?? existingOrder?.purchaseAmount) || 0);
+    const reimbursementAmount = Math.max(0, Number(orderData.reimbursementAmount ?? existingOrder?.reimbursementAmount) || 0);
+    const now = new Date().toISOString();
+
+    if (resolvedCardId && !selectedCard && !existingOrder) {
+        return null;
+    }
+
+    const cashbackAmount = calculateCashbackValue(purchaseAmount, cashbackRate);
+    const profit = calculateChurningProfit(purchaseAmount, reimbursementAmount, cashbackRate);
+
+    return {
+        id: existingOrder?.id || generateId(),
+        store: (orderData.store ?? existingOrder?.store ?? 'Unknown Store').trim(),
+        purchaseAmount,
+        reimbursementAmount,
+        cardId: resolvedCardId,
+        cardName: selectedCard?.name || fallbackSnapshot.cardName || 'Unknown Card',
+        cashbackRate,
+        cashbackType,
+        cashbackAmount,
+        profit,
+        trackingUploaded: Boolean(orderData.trackingUploaded ?? existingOrder?.trackingUploaded),
+        delivered: Boolean(orderData.delivered ?? existingOrder?.delivered),
+        paid: Boolean(orderData.paid ?? existingOrder?.paid),
+        purchaseDate: orderData.purchaseDate ?? existingOrder?.purchaseDate ?? new Date().toISOString().split('T')[0],
+        paidDate: (orderData.paid ?? existingOrder?.paid)
+            ? (orderData.paidDate ?? existingOrder?.paidDate ?? new Date().toISOString().split('T')[0])
+            : null,
+        createdAt: existingOrder?.createdAt || now,
+        updatedAt: now
+    };
 }
 
 /**
@@ -159,6 +323,118 @@ export function updateLot(id, updates) {
     }
 
     return data.lots[index];
+}
+
+export function saveChurnCard(cardData) {
+    const data = getStorageData();
+    const newCard = buildChurningCardPayload(cardData);
+
+    data.churnCards.unshift(newCard);
+    saveStorageData(data);
+
+    if (auth.currentUser && localStorage.getItem('demoMode') !== 'true') {
+        saveChurnCardToCloud(newCard);
+    }
+
+    return newCard;
+}
+
+export function updateChurnCard(id, updates) {
+    const data = getStorageData();
+    const index = data.churnCards.findIndex(card => card.id === id);
+
+    if (index === -1) return null;
+
+    data.churnCards[index] = buildChurningCardPayload({
+        ...data.churnCards[index],
+        ...updates
+    }, data.churnCards[index]);
+
+    saveStorageData(data);
+
+    if (auth.currentUser && localStorage.getItem('demoMode') !== 'true') {
+        saveChurnCardToCloud(data.churnCards[index]);
+    }
+
+    return data.churnCards[index];
+}
+
+export function deleteChurnCard(id) {
+    const data = getStorageData();
+    const isInUse = data.churningOrders.some(order => order.cardId === id);
+
+    if (isInUse) return false;
+
+    const nextCards = data.churnCards.filter(card => card.id !== id);
+    if (nextCards.length === data.churnCards.length) return false;
+
+    data.churnCards = nextCards;
+    saveStorageData(data);
+
+    if (auth.currentUser && localStorage.getItem('demoMode') !== 'true') {
+        deleteChurnCardFromCloud(id);
+    }
+
+    return true;
+}
+
+export function getChurningOrderById(id) {
+    return getChurningOrders().find(order => order.id === id) || null;
+}
+
+export function saveChurningOrder(orderData) {
+    const data = getStorageData();
+    const newOrder = buildChurningOrderPayload(orderData);
+
+    if (!newOrder) return null;
+
+    data.churningOrders.unshift(newOrder);
+    saveStorageData(data);
+
+    if (auth.currentUser && localStorage.getItem('demoMode') !== 'true') {
+        saveChurningOrderToCloud(newOrder);
+    }
+
+    return newOrder;
+}
+
+export function updateChurningOrder(id, updates) {
+    const data = getStorageData();
+    const index = data.churningOrders.findIndex(order => order.id === id);
+
+    if (index === -1) return null;
+
+    const updatedOrder = buildChurningOrderPayload({
+        ...data.churningOrders[index],
+        ...updates
+    }, data.churningOrders[index]);
+
+    if (!updatedOrder) return null;
+
+    data.churningOrders[index] = updatedOrder;
+    saveStorageData(data);
+
+    if (auth.currentUser && localStorage.getItem('demoMode') !== 'true') {
+        saveChurningOrderToCloud(updatedOrder);
+    }
+
+    return updatedOrder;
+}
+
+export function deleteChurningOrder(id) {
+    const data = getStorageData();
+    const nextOrders = data.churningOrders.filter(order => order.id !== id);
+
+    if (nextOrders.length === data.churningOrders.length) return false;
+
+    data.churningOrders = nextOrders;
+    saveStorageData(data);
+
+    if (auth.currentUser && localStorage.getItem('demoMode') !== 'true') {
+        deleteChurningOrderFromCloud(id);
+    }
+
+    return true;
 }
 
 /**

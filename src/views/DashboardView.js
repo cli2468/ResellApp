@@ -1,9 +1,10 @@
 // Dashboard View - Revenue/Profit chart with time-range filtering and Return Alerts
 
-import { getAllSales, getSalesByDateRange, getLots, getLotTotalProfit, getLotsNearingReturnDeadline, getReturnDeadline, markReturned, dismissReturnAlert } from '../services/storage.js';
-import { calculateMonthlyStats, formatCurrency, getMonthName } from '../services/calculations.js';
+import { getAllSales, getSalesByDateRange, getLots, getLotTotalProfit, getLotsNearingReturnDeadline, getReturnDeadline, markReturned, dismissReturnAlert, getChurningOrders } from '../services/storage.js';
+import { calculateMonthlyStats, formatCurrency, getMonthName, calculateChurningStats, getChurningOrdersForMonth } from '../services/calculations.js';
 import { aggregateSalesByDay, getSalesForDay } from '../services/chartData.js';
 import { animateCountUp } from '../utils/animations.js';
+import { navigate } from '../router.js';
 
 // Current selected time range for dashboard
 let selectedRange = null;
@@ -105,6 +106,59 @@ function getContextualHeader() {
   return 'Last 30 Days';
 }
 
+function renderChurningDashboardCard() {
+  const orders = getChurningOrders();
+  const monthlyOrders = getChurningOrdersForMonth(orders);
+  const monthlyStats = calculateChurningStats(monthlyOrders);
+  const overallStats = calculateChurningStats(orders);
+
+  if (orders.length === 0) {
+    return `
+      <div class="churn-dashboard-card">
+        <div class="churn-dashboard-header">
+          <div>
+            <div class="churn-dashboard-label">Churning</div>
+            <div class="churn-dashboard-title">No orders logged yet</div>
+          </div>
+          <button class="btn btn-secondary" id="open-churning-tab">Open Tab</button>
+        </div>
+        <p class="churn-dashboard-copy">Track buy-group reimbursements, cashback profit, and payment status in one place.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="churn-dashboard-card">
+      <div class="churn-dashboard-header">
+        <div>
+          <div class="churn-dashboard-label">Churning This Month</div>
+          <div class="churn-dashboard-title">${formatCurrency(monthlyStats.totalProfit, true)}</div>
+        </div>
+        <button class="btn btn-secondary" id="open-churning-tab">Open Tab</button>
+      </div>
+      <div class="churn-dashboard-copy">${monthlyStats.orderCount} order${monthlyStats.orderCount === 1 ? '' : 's'} logged this month.</div>
+      <div class="churn-dashboard-grid">
+        <div>
+          <span>Awaiting tracking</span>
+          <strong>${overallStats.pendingTrackingCount}</strong>
+        </div>
+        <div>
+          <span>Awaiting payment</span>
+          <strong>${overallStats.pendingPaymentCount}</strong>
+        </div>
+        <div>
+          <span>Tracking overdue</span>
+          <strong>${overallStats.trackingOverdueCount}</strong>
+        </div>
+        <div>
+          <span>Cash tied up</span>
+          <strong>${formatCurrency(overallStats.outstandingPurchaseVolume)}</strong>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export function DashboardView() {
   if (!selectedRange) {
     selectedRange = localStorage.getItem('dashboardCurrentRange') || '30d';
@@ -168,6 +222,8 @@ export function DashboardView() {
         ${renderTopPerformers(allLots)}
         
         ${renderInventoryCard(allLots, unsoldCostBasis, unsoldUnits)}
+
+        ${renderChurningDashboardCard()}
         
         <!-- Day breakdown modal -->
         <div class="modal-overlay day-breakdown-modal" id="day-breakdown-modal" style="display: none;">
@@ -722,5 +778,9 @@ export function initDashboardEvents(isInitialLoad = false) {
       dismissReturnAlert(lotId);
       window.dispatchEvent(new CustomEvent('viewchange'));
     });
+  });
+
+  document.getElementById('open-churning-tab')?.addEventListener('click', () => {
+    navigate('/churning');
   });
 }

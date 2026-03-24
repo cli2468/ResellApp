@@ -1,11 +1,11 @@
 // Login Modal Component
 import { signInWithGoogle, logout, auth, onUserChanged } from '../services/firebase.js';
-import { uploadLocalData, syncLots } from '../services/firebaseSync.js';
-import { getLots, setLots } from '../services/storage.js';
+import { syncLots, syncChurningOrders, syncChurnCards } from '../services/firebaseSync.js';
+import { setLots, setChurningOrders, setChurnCards, clearAllData } from '../services/storage.js';
 
 let isOpen = false;
 
-// LoginModal() returns empty string — modal is opened/closed via direct DOM manipulation
+// LoginModal() returns empty string - modal is opened/closed via direct DOM manipulation
 export function LoginModal() {
   return '';
 }
@@ -39,7 +39,7 @@ function renderLoginPrompt() {
     <div class="login-prompt">
       <div class="login-icon">☁️</div>
       <h3>Sync Across Devices</h3>
-      <p>Sign in with Google to sync your inventory and sales data between your computer and phone automatically.</p>
+      <p>Sign in with Google to sync your inventory, sales, and churning data between your computer and phone automatically.</p>
       
       <button class="btn btn-primary btn-full" id="google-signin-btn" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 48 48">
@@ -160,7 +160,7 @@ export function initLoginModalEvents() {
       } catch (error) {
         console.error('Sign-in error:', error);
         if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-          alert("Failed to sign in: " + (error.message || "Check project config."));
+          alert('Failed to sign in: ' + (error.message || 'Check project config.'));
         }
       }
     }
@@ -179,27 +179,36 @@ export function initLoginModalEvents() {
 
   // Listen for user changes to start sync listeners
   let syncInitialized = false;
+  let syncUnsubscribes = [];
+
   onUserChanged((user) => {
     if (user && !syncInitialized) {
       syncInitialized = true;
-
-      // Start real-time sync listener
-      let isFirstSync = true;
-      syncLots((cloudLots) => {
-        if (isFirstSync) {
-          isFirstSync = false;
-          console.log('📥 Initial sync: replacing local with', cloudLots.length, 'cloud items');
+      syncUnsubscribes = [
+        syncLots((cloudLots) => {
           setLots(cloudLots);
           window.dispatchEvent(new CustomEvent('viewchange'));
-        }
-      });
+        }),
+        syncChurningOrders((cloudOrders) => {
+          setChurningOrders(cloudOrders);
+          window.dispatchEvent(new CustomEvent('viewchange'));
+        }),
+        syncChurnCards((cloudCards) => {
+          setChurnCards(cloudCards);
+          window.dispatchEvent(new CustomEvent('viewchange'));
+        })
+      ].filter(Boolean);
     } else if (!user) {
+      syncUnsubscribes.forEach((unsubscribe) => unsubscribe?.());
+      syncUnsubscribes = [];
       syncInitialized = false;
+
       // Clear global data cache entirely when a user signs out to preserve privacy
       // Bypass this wipe if actively running the demo mode
       if (localStorage.getItem('demoMode') !== 'true') {
-        setLots([]);
+        clearAllData();
       }
+
       window.dispatchEvent(new CustomEvent('viewchange'));
     }
   });

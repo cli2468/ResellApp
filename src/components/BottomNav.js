@@ -22,6 +22,14 @@ export function BottomNav(activeRoute = '/') {
           <line x1="12" y1="22.08" x2="12" y2="12"></line>
         </svg>
       </button>
+
+      <button class="nav-item nav-churning ${activeRoute === '/churning' ? 'active' : ''}" data-route="/churning" data-anim="churning">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="3"></rect>
+          <path d="M2 10h20"></path>
+          <path d="M16 15h2"></path>
+        </svg>
+      </button>
       
       <button class="nav-item nav-add ${activeRoute === '/add' ? 'active' : ''}" data-route="/add" data-anim="add">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

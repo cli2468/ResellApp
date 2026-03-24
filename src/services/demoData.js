@@ -1,3 +1,5 @@
+import { calculateCashbackValue, calculateChurningProfit } from './calculations.js';
+
 export function generateDemoData() {
     const lots = [];
     let lotIdCounter = 1;
@@ -209,4 +211,109 @@ export function generateDemoData() {
     }
 
     return lots;
+}
+
+export function generateDemoChurningCards() {
+    const createdAt = new Date().toISOString();
+
+    return [
+        {
+            id: 'demo-card-amex-gold',
+            name: 'Amex Gold',
+            cashbackRate: 4,
+            cashbackType: 'points',
+            createdAt,
+            updatedAt: createdAt
+        },
+        {
+            id: 'demo-card-citi-custom',
+            name: 'Citi Custom Cash',
+            cashbackRate: 5,
+            cashbackType: 'statement-credit',
+            createdAt,
+            updatedAt: createdAt
+        }
+    ];
+}
+
+export function generateDemoChurningOrders(cards = generateDemoChurningCards()) {
+    const cardLookup = Object.fromEntries(cards.map((card) => [card.id, card]));
+    const today = new Date();
+
+    const demoOrders = [
+        {
+            id: 'demo-churn-order-1',
+            store: 'Amazon',
+            purchaseAmount: 48215,
+            reimbursementAmount: 48215,
+            cardId: 'demo-card-amex-gold',
+            purchaseDate: shiftDate(today, -2),
+            trackingUploaded: false,
+            delivered: false,
+            paid: false,
+            paidDate: null
+        },
+        {
+            id: 'demo-churn-order-2',
+            store: 'Best Buy',
+            purchaseAmount: 79999,
+            reimbursementAmount: 80499,
+            cardId: 'demo-card-citi-custom',
+            purchaseDate: shiftDate(today, -6),
+            trackingUploaded: false,
+            delivered: false,
+            paid: false,
+            paidDate: null
+        },
+        {
+            id: 'demo-churn-order-3',
+            store: 'Amazon',
+            purchaseAmount: 12999,
+            reimbursementAmount: 12999,
+            cardId: 'demo-card-citi-custom',
+            purchaseDate: shiftDate(today, -9),
+            trackingUploaded: true,
+            delivered: true,
+            paid: false,
+            paidDate: null
+        },
+        {
+            id: 'demo-churn-order-4',
+            store: 'Target',
+            purchaseAmount: 33998,
+            reimbursementAmount: 33998,
+            cardId: 'demo-card-amex-gold',
+            purchaseDate: shiftDate(today, -16),
+            trackingUploaded: true,
+            delivered: true,
+            paid: true,
+            paidDate: shiftDate(today, -4)
+        }
+    ];
+
+    return demoOrders.map((order) => enrichDemoOrder(order, cardLookup[order.cardId]));
+}
+
+function shiftDate(baseDate, days) {
+    const nextDate = new Date(baseDate);
+    nextDate.setDate(nextDate.getDate() + days);
+    return nextDate.toISOString().split('T')[0];
+}
+
+function enrichDemoOrder(order, card) {
+    const cashbackRate = Number(card?.cashbackRate) || 0;
+    const cashbackAmount = calculateCashbackValue(order.purchaseAmount, cashbackRate);
+    const profit = calculateChurningProfit(order.purchaseAmount, order.reimbursementAmount, cashbackRate);
+    const timestamp = new Date(`${order.purchaseDate}T12:00:00`).toISOString();
+
+    return {
+        ...order,
+        cardName: card?.name || 'Unknown Card',
+        cashbackRate,
+        cashbackType: card?.cashbackType || 'statement-credit',
+        cashbackAmount,
+        profit,
+        createdAt: timestamp,
+        updatedAt: timestamp
+    };
 }

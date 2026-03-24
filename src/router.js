@@ -7,7 +7,7 @@ let currentPath = '/';
 let isTransitioning = false;
 
 // Define route order for direction calculation
-const routeOrder = ['/', '/add', '/inventory', '/sales'];
+const routeOrder = ['/', '/inventory', '/churning', '/add', '/sales'];
 
 /**
  * Register a route

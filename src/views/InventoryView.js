@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, PLATFORM_FEES, calculateSaleProfit } from '
 import { importLotsFromCSV, generateCSVTemplate } from '../services/csvImport.js';
 import { celebrateSuccess } from '../utils/animations.js';
 import { DesktopInventoryView, initDesktopInventoryEvents } from './DesktopInventoryView.js';
+import { confirmAction, showToast } from '../services/feedback.js';
 
 let activeTab = 'unsold';
 let searchQuery = '';
@@ -165,7 +166,7 @@ function renderLotCard(lot, index = 0) {
         <span class="lot-progress-percent">${soldPercent}%</span>
       </div>
       <div class="lot-progress">
-        <div class="lot-progress-bar" data-width="${soldPercent}" style="width: 0%"></div>
+        <div class="lot-progress-bar" data-width="${soldPercent}"></div>
       </div>
       <div class="lot-progress-text">${unitsSold} of ${lot.quantity} sold</div>
     </div>
@@ -216,7 +217,7 @@ function renderLotCard(lot, index = 0) {
   ` : '';
 
   return `
-    <div class="lot-card-swipe-wrapper ${isExpanded ? 'card-expanded' : ''}" data-lot-id="${lot.id}" style="animation: cardFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 60}ms; opacity: 0;">
+    <div class="lot-card-swipe-wrapper lot-card-entering lot-card-delay-${Math.min(index, 7)} ${isExpanded ? 'card-expanded' : ''}" data-lot-id="${lot.id}">
       <!-- Background Actions -->
       <div class="swipe-actions-bg">
         <div class="swipe-bg-action edit-bg" data-lot-id="${lot.id}">
@@ -385,7 +386,7 @@ function renderEditSaleModal() {
           </div>
           
           <div class="transaction-grid">
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-tight">
               <label class="transactional-label">Quantity</label>
               <div class="quantity-stepper">
                 <button type="button" class="stepper-btn" id="edit-sale-decrease-qty" disabled>-</button>
@@ -393,14 +394,14 @@ function renderEditSaleModal() {
                 <button type="button" class="stepper-btn" id="edit-sale-increase-qty" disabled>+</button>
               </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-tight">
               <label class="transactional-label">Unit Price ($)</label>
               <input type="number" class="form-input form-input-compact transactional-input-emphasized" id="edit-sale-price" placeholder="0.00" step="0.01" min="0" value="${priceValue}" inputmode="decimal" />
             </div>
           </div>
           
           ${sale.platform === 'ebay' ? `
-            <div class="form-group" style="margin-bottom: 16px;">
+            <div class="form-group form-group-spaced">
               <label class="transactional-label">Shipping per unit ($)</label>
               <input type="number" class="form-input form-input-compact transactional-input-emphasized" id="edit-shipping-cost" placeholder="0.00" step="0.01" min="0" value="${shippingValue}" inputmode="decimal" />
             </div>
@@ -412,7 +413,7 @@ function renderEditSaleModal() {
           </div>
         </div>
         
-        <div class="modal-footer" style="padding-top: 0;">
+        <div class="modal-footer modal-footer-flush">
           <button class="btn btn-transactional-primary btn-full" id="save-edit-sale">
             Save Changes
           </button>
@@ -452,7 +453,7 @@ function renderEditLotModal() {
           </div>
 
           <div class="transaction-grid">
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-tight">
               <label class="transactional-label">Total Quantity</label>
               <div class="quantity-stepper">
                 <button type="button" class="stepper-btn" id="edit-decrease-qty">-</button>
@@ -460,7 +461,7 @@ function renderEditLotModal() {
                 <button type="button" class="stepper-btn" id="edit-increase-qty">+</button>
               </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-tight">
               <label class="transactional-label">Total Cost ($)</label>
               <input type="number" class="form-input form-input-compact transactional-input-emphasized" id="edit-lot-unit-cost" placeholder="0.00" step="0.01" min="0" value="${totalCostValue}" inputmode="decimal" />
             </div>
@@ -472,7 +473,7 @@ function renderEditLotModal() {
           </div>
         </div>
 
-        <div class="modal-footer" style="padding-top: 0;">
+        <div class="modal-footer modal-footer-flush">
           <button class="btn btn-transactional-primary btn-full" id="save-edit-lot">
             Save Changes
           </button>
@@ -497,19 +498,19 @@ function renderImportModal() {
         </div>
         
         <div class="import-drop-zone" id="import-drop-zone">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-bottom: var(--spacing-md);">
+          <svg class="import-drop-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="17 8 12 3 7 8"></polyline>
             <line x1="12" y1="3" x2="12" y2="15"></line>
           </svg>
-          <p style="margin: 0; color: var(--text-secondary);">Drop CSV file here or click to browse</p>
-          <p style="margin: var(--spacing-sm) 0 0 0; font-size: var(--font-size-sm); color: var(--text-muted);">Columns: name, cost, quantity, purchase_date</p>
-          <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+          <p class="import-drop-copy">Drop CSV file here or click to browse</p>
+          <p class="import-drop-note">Columns: name, cost, quantity, purchase_date</p>
+          <input type="file" id="csv-file-input" class="file-input-hidden" accept=".csv">
         </div>
         
-        <div id="import-result" style="display: none; margin-top: var(--spacing-lg);"></div>
+        <div id="import-result" class="import-result" hidden></div>
         
-        <div style="margin-top: var(--spacing-lg); text-align: center;">
+        <div class="import-modal-actions">
           <button class="btn btn-secondary btn-sm" id="download-template">Download Template</button>
         </div>
       </div>
@@ -546,7 +547,7 @@ function renderSaleModal() {
   };
 
   const shippingFieldHtml = isEbay ? `
-    <div class="form-group shipping-field" style="margin-bottom: 16px;">
+    <div class="form-group shipping-field form-group-spaced">
       <label class="transactional-label">Shipping per unit ($)</label>
       <input type="number" class="form-input form-input-compact" id="shipping-cost" placeholder="0.00" step="0.01" min="0" value="${shippingCost}" inputmode="decimal" />
     </div>
@@ -577,7 +578,7 @@ function renderSaleModal() {
           
           <!-- Zone 2: Core Transaction -->
           <div class="transaction-grid">
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-tight">
               <label class="transactional-label">Quantity</label>
               <div class="quantity-stepper">
                 <button type="button" class="stepper-btn" id="decrease-qty">-</button>
@@ -585,13 +586,13 @@ function renderSaleModal() {
                 <button type="button" class="stepper-btn" id="increase-qty">+</button>
               </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group form-group-tight">
               <label class="transactional-label">Unit Price ($)</label>
               <input type="number" class="form-input form-input-compact transactional-input-emphasized" id="sale-price" placeholder="0.00" step="0.01" min="0" value="${salePrice}" inputmode="decimal" />
             </div>
           </div>
           
-          <div class="form-group" style="margin-bottom: 12px;">
+          <div class="form-group form-group-compact">
             <label class="transactional-label">Platform</label>
             <div class="platform-segmented">
               ${Object.entries(PLATFORM_FEES).map(([key, platform]) => `
@@ -611,9 +612,9 @@ function renderSaleModal() {
             <input type="date" class="form-input form-input-compact" id="sale-date" value="${saleDate}" />
           </div>
           
-          <div class="breakdown-toggle" id="breakdown-toggle" style="justify-content: center; font-size: 12px; color: var(--text-muted); padding: 4px; opacity: 0.8; margin-top: 8px;">
-            <span style="font-weight: 600;">View detailed breakdown</span>
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" id="breakdown-arrow" style="margin-left: 4px;">
+          <div class="breakdown-toggle breakdown-toggle-compact" id="breakdown-toggle">
+            <span class="breakdown-toggle-label">View detailed breakdown</span>
+            <svg class="breakdown-toggle-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" id="breakdown-arrow">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </div>
@@ -911,25 +912,37 @@ function initLotCardEvents() {
 
   // Delete individual sale
   document.querySelectorAll('.delete-sale-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const { lotId, saleId } = btn.dataset;
-      if (confirm('Delete this sale record and restore units to inventory?')) {
-        deleteSale(lotId, saleId);
-        window.dispatchEvent(new CustomEvent('viewchange'));
-      }
+      const confirmed = await confirmAction({
+        title: 'Delete sale',
+        message: 'Delete this sale record and restore units to inventory?',
+        confirmLabel: 'Delete sale',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
+
+      deleteSale(lotId, saleId);
+      window.dispatchEvent(new CustomEvent('viewchange'));
     });
   });
 
   // Delete lot shortcut
   document.querySelectorAll('.delete-lot-card-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const lotId = btn.dataset.lotId;
-      if (confirm('Delete this lot and all its sales history?')) {
-        deleteLot(lotId);
-        window.dispatchEvent(new CustomEvent('viewchange'));
-      }
+      const confirmed = await confirmAction({
+        title: 'Delete lot',
+        message: 'Delete this lot and all its sales history?',
+        confirmLabel: 'Delete lot',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
+
+      deleteLot(lotId);
+      window.dispatchEvent(new CustomEvent('viewchange'));
     });
   });
 
@@ -962,7 +975,7 @@ function initLotCardEvents() {
 
   // Return sale button - marks sale as returned with confirmation
   document.querySelectorAll('.return-sale-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const { lotId, saleId } = btn.dataset;
       const lot = getLots().find(l => l.id === lotId);
@@ -975,10 +988,16 @@ function initLotCardEvents() {
         ? `This sale had a profit of ${profit}. Marking it as returned will:\n\n1. Remove this profit from your totals\n2. Restore ${sale.unitsSold} unit(s) to inventory\n\nAre you sure you want to mark this as returned?`
         : `This sale had a loss of ${profit}. Marking it as returned will:\n\n1. Remove this loss from your totals (you'll lose the money you made from this sale)\n2. Restore ${sale.unitsSold} unit(s) to inventory\n\nAre you sure you want to mark this as returned?`;
 
-      if (confirm(message)) {
-        markSaleReturned(lotId, saleId);
-        window.dispatchEvent(new CustomEvent('viewchange'));
-      }
+      const confirmed = await confirmAction({
+        title: 'Mark sale as returned',
+        message,
+        confirmLabel: 'Mark returned',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
+
+      markSaleReturned(lotId, saleId);
+      window.dispatchEvent(new CustomEvent('viewchange'));
     });
   });
 
@@ -1092,8 +1111,14 @@ function initSwipeHandlers() {
       } else if (currentX < -commitThreshold) {
         // COMMIT LEFT -> DELETE
         card.style.transform = `translateX(-${cardWidth}px)`;
-        setTimeout(() => {
-          if (confirm('Delete this lot and all its sales history?')) {
+        setTimeout(async () => {
+          const confirmed = await confirmAction({
+            title: 'Delete lot',
+            message: 'Delete this lot and all its sales history?',
+            confirmLabel: 'Delete lot',
+            tone: 'danger'
+          });
+          if (confirmed) {
             deleteLot(lotId);
             window.dispatchEvent(new CustomEvent('viewchange'));
           } else {
@@ -1162,9 +1187,15 @@ function initSwipeHandlers() {
       });
     }
     if (deleteBg) {
-      deleteBg.addEventListener('click', (e) => {
+      deleteBg.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm('Delete this lot and all its sales history?')) {
+        const confirmed = await confirmAction({
+          title: 'Delete lot',
+          message: 'Delete this lot and all its sales history?',
+          confirmLabel: 'Delete lot',
+          tone: 'danger'
+        });
+        if (confirmed) {
           deleteLot(lotId);
           window.dispatchEvent(new CustomEvent('viewchange'));
         } else {
@@ -1251,15 +1282,24 @@ function handleSaveEditLot(e) {
 
   // Validate
   if (!newName) {
-    alert('Please enter an item name');
+    showToast('Please enter an item name.', {
+      variant: 'error',
+      title: 'Edit lot'
+    });
     return;
   }
   if (isNaN(newTotalCostDollars) || newTotalCostDollars < 0) {
-    alert('Please enter a valid total cost');
+    showToast('Please enter a valid total cost.', {
+      variant: 'error',
+      title: 'Edit lot'
+    });
     return;
   }
   if (isNaN(newQuantity) || newQuantity < 1) {
-    alert('Please enter a valid quantity');
+    showToast('Please enter a valid quantity.', {
+      variant: 'error',
+      title: 'Edit lot'
+    });
     return;
   }
 
@@ -1270,7 +1310,10 @@ function handleSaveEditLot(e) {
   // Check if reducing quantity below already sold
   const unitsSold = lot.quantity - lot.remaining;
   if (newQuantity < unitsSold) {
-    alert(`Cannot reduce quantity below ${unitsSold} (already sold). Please delete sales first.`);
+    showToast(`Cannot reduce quantity below ${unitsSold} already sold. Delete sales first.`, {
+      variant: 'error',
+      title: 'Edit lot'
+    });
     return;
   }
 
@@ -1420,14 +1463,20 @@ function handleSaveEditSale() {
   // Safety check: if any values are NaN, show error and don't save
   if (isNaN(newPrice) || isNaN(newShipping)) {
     console.error('NaN detected in edit sale calculation:', { newPrice, newShipping, shippingPerUnitCents, sale });
-    alert('Error: Invalid number calculated. Please check your inputs and try again.');
+    showToast('Invalid number calculated. Please check your inputs and try again.', {
+      variant: 'error',
+      title: 'Edit sale'
+    });
     return;
   }
 
   // Validate lot.unitCost is valid
   if (isNaN(lot.unitCost)) {
     console.error('NaN detected in lot.unitCost:', lot);
-    alert('Error: Invalid unit cost in lot data. Please contact support.');
+    showToast('Invalid unit cost in lot data. Please contact support.', {
+      variant: 'error',
+      title: 'Edit sale'
+    });
     return;
   }
 
@@ -1445,7 +1494,10 @@ function handleSaveEditSale() {
   // Validate profit calculation result
   if (isNaN(profitResult.profit)) {
     console.error('NaN detected in profit calculation:', profitResult, { lot, sale, newPrice, newShipping });
-    alert('Error: Profit calculation failed. Please check your inputs and try again.');
+    showToast('Profit calculation failed. Please check your inputs and try again.', {
+      variant: 'error',
+      title: 'Edit sale'
+    });
     return;
   }
 
@@ -1630,12 +1682,19 @@ export function initInventoryEvents() {
   });
 
   // Delete lot
-  document.getElementById('delete-lot')?.addEventListener('click', () => {
-    if (selectedLotId && confirm('Are you sure you want to delete this ENTIRE lot and all its sales?')) {
-      deleteLot(selectedLotId);
-      closeSaleModal();
-      window.dispatchEvent(new CustomEvent('viewchange'));
-    }
+  document.getElementById('delete-lot')?.addEventListener('click', async () => {
+    if (!selectedLotId) return;
+    const confirmed = await confirmAction({
+      title: 'Delete entire lot',
+      message: 'Are you sure you want to delete this entire lot and all its sales?',
+      confirmLabel: 'Delete lot',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
+
+    deleteLot(selectedLotId);
+    closeSaleModal();
+    window.dispatchEvent(new CustomEvent('viewchange'));
   });
 
   // === CSV Import Events ===
@@ -1714,7 +1773,7 @@ async function processCSVFile(file) {
   const resultEl = document.getElementById('import-result');
   if (!resultEl) return;
 
-  resultEl.style.display = 'block';
+  resultEl.hidden = false;
   resultEl.innerHTML = '<p class="text-muted">Importing...</p>';
 
   try {
@@ -1727,9 +1786,9 @@ async function processCSVFile(file) {
     html += `</div>`;
 
     if (errors.length > 0) {
-      html += `<div class="import-errors" style="margin-top: var(--spacing-md); color: var(--accent-warning);">
+      html += `<div class="import-errors">
         <strong>⚠️ ${errors.length} error${errors.length !== 1 ? 's' : ''}:</strong>
-        <ul style="margin: var(--spacing-sm) 0 0 var(--spacing-lg); padding: 0; font-size: var(--font-size-sm);">
+        <ul class="import-errors-list">
           ${errors.slice(0, 5).map(e => `<li>${e}</li>`).join('')}
           ${errors.length > 5 ? `<li>...and ${errors.length - 5} more</li>` : ''}
         </ul>
@@ -1737,10 +1796,14 @@ async function processCSVFile(file) {
     }
 
     if (success > 0) {
-      html += `<button class="btn btn-success btn-full" style="margin-top: var(--spacing-lg);" onclick="window.dispatchEvent(new CustomEvent('viewchange'))">Done</button>`;
+      html += '<button class="btn btn-success btn-full import-result-close" id="close-import-result">Done</button>';
     }
 
     resultEl.innerHTML = html;
+
+    document.getElementById('close-import-result')?.addEventListener('click', () => {
+      closeImportModal();
+    });
 
     if (success > 0) {
       setTimeout(() => {

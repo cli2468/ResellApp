@@ -23,6 +23,25 @@ function getSortIndicator(key) {
   return desktopSortDirection === 'asc' ? '↑' : '↓';
 }
 
+function renderPlatformSelect(selectedPlatform, inputId) {
+  const options = [
+    ['amazon', 'Amazon'],
+    ['ebay', 'eBay'],
+    ['facebook', 'Facebook'],
+    ['walmart', 'Walmart'],
+    ['target', 'Target'],
+    ['woot', 'Woot'],
+    ['bestbuy', 'Best Buy']
+  ];
+
+  return `
+    <select class="form-input" id="${inputId}">
+      ${options.map(([value, label]) => `
+        <option value="${value}" ${selectedPlatform === value ? 'selected' : ''}>${label}</option>
+      `).join('')}
+    </select>
+  `;
+}
 
 function generateSparklineSVG(lot) {
   const purchaseDate = new Date(lot.purchaseDate);
@@ -480,21 +499,7 @@ function renderSaleDrawer(lot) {
 
         <div class="form-group">
           <label class="form-label">Platform</label>
-          <div class="custom-dropdown" id="desktop-sale-platform-dropdown">
-            <div class="dropdown-trigger">
-              <span class="platform-name">${desktopSalePlatform.charAt(0).toUpperCase() + desktopSalePlatform.slice(1)}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dropdown-chevron"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
-            <div class="dropdown-menu">
-              <div class="dropdown-item" data-value="amazon">Amazon</div>
-              <div class="dropdown-item" data-value="ebay">eBay</div>
-              <div class="dropdown-item" data-value="facebook">Facebook</div>
-              <div class="dropdown-item" data-value="walmart">Walmart</div>
-              <div class="dropdown-item" data-value="target">Target</div>
-              <div class="dropdown-item" data-value="woot">Woot</div>
-              <div class="dropdown-item" data-value="bestbuy">Best Buy</div>
-            </div>
-          </div>
+          ${renderPlatformSelect(desktopSalePlatform, 'desktop-sale-platform')}
         </div>
 
         ${!isFacebook ? `
@@ -895,32 +900,15 @@ function attachDrawerEvents(lot) {
     }
   });
 
-  // Custom Platform Dropdown
-  const dropdown = document.getElementById('desktop-sale-platform-dropdown');
-  const trigger = dropdown?.querySelector('.dropdown-trigger');
+  document.getElementById('desktop-sale-platform')?.addEventListener('change', (e) => {
+    desktopSalePlatform = e.target.value;
 
-  trigger?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    dropdown.classList.toggle('open');
-  });
-
-  // Close dropdown on click outside
-  const closeDropdown = () => dropdown?.classList.remove('open');
-  document.addEventListener('click', closeDropdown);
-
-  dropdown?.querySelectorAll('.dropdown-item').forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      desktopSalePlatform = item.dataset.value;
-      dropdown.classList.remove('open');
-
-      // Re-render drawer to show/hide shipping field
-      const rightPanel = document.querySelector('.inventory-right-panel');
-      if (rightPanel) {
-        rightPanel.innerHTML = renderSaleDrawer(lot);
-        attachDrawerEvents(lot);
-      }
-    });
+    // Re-render drawer to show/hide shipping field
+    const rightPanel = document.querySelector('.inventory-right-panel');
+    if (rightPanel) {
+      rightPanel.innerHTML = renderSaleDrawer(lot);
+      attachDrawerEvents(lot);
+    }
   });
 
 

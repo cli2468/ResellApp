@@ -2,6 +2,7 @@
 import { signInWithGoogle, logout, auth, onUserChanged } from '../services/firebase.js';
 import { syncLots, syncChurningOrders, syncChurnCards } from '../services/firebaseSync.js';
 import { setLots, setChurningOrders, setChurnCards, clearAllData } from '../services/storage.js';
+import { showToast } from '../services/feedback.js';
 
 let isOpen = false;
 
@@ -160,7 +161,10 @@ export function initLoginModalEvents() {
       } catch (error) {
         console.error('Sign-in error:', error);
         if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-          alert('Failed to sign in: ' + (error.message || 'Check project config.'));
+          showToast('Failed to sign in: ' + (error.message || 'Check project config.'), {
+            variant: 'error',
+            title: 'Cloud sync'
+          });
         }
       }
     }

@@ -3,8 +3,8 @@
 import { extractOrderData, fileToBase64, createThumbnail } from '../services/ocr.js';
 import { saveLot } from '../services/storage.js';
 import { navigate } from '../router.js';
-import { celebrateSuccess } from '../utils/animations.js';
 import { importLotsFromCSV } from '../services/csvImport.js';
+import { showToast } from '../services/feedback.js';
 
 // State management for the new Bento UI
 let currentActiveView = 'picker'; // 'picker', 'ocr', 'manual', 'csv'
@@ -87,9 +87,9 @@ function renderPicker() {
   return `
     <div class="add-inventory-picker">
       <!-- 01 Order Screenshot Parser (Featured) -->
-      <div class="add-method-card featured" data-view="ocr" style="--index: 0">
-        <div class="card-screenshot-collage" style="overflow: visible; border-radius: 10px; margin: 0 -24px 20px; width: calc(100% + 48px);">
-          <video autoplay loop muted playsinline style="width: 100%; height: auto; object-fit: contain; display: block; border-radius: 10px;">
+      <div class="add-method-card featured add-method-card-delay-0" data-view="ocr">
+        <div class="card-screenshot-collage card-screenshot-collage-bleed">
+          <video autoplay loop muted playsinline class="card-screenshot-video">
             <source src="${import.meta.env.BASE_URL}demo-parser.mp4" type="video/mp4">
           </video>
         </div>
@@ -106,7 +106,7 @@ function renderPicker() {
       </div>
 
       <!-- 02 Add Manually -->
-      <div class="add-method-card" data-view="manual" style="--index: 1">
+      <div class="add-method-card add-method-card-delay-1" data-view="manual">
         <div class="add-card-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </div>
@@ -119,7 +119,7 @@ function renderPicker() {
       </div>
 
       <!-- 03 Import CSV -->
-      <div class="add-method-card" data-view="csv" style="--index: 2">
+      <div class="add-method-card add-method-card-delay-2" data-view="csv">
         <div class="add-card-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         </div>
@@ -169,16 +169,16 @@ function renderOcrFlow() {
   if (ocrState === 'idle' || ocrState === 'parsing') {
     return `
       <div class="add-drop-zone" id="ocr-drop-zone">
-        <input type="file" id="ocr-file-input" style="display: none;" accept="image/*" />
+        <input type="file" id="ocr-file-input" class="file-input-hidden" accept="image/*" />
         <div class="add-drop-title">Drop your screenshot here</div>
         <div class="add-drop-hint">PNG, JPG, WEBP — works with Amazon, Walmart, Target, Woot, Best Buy, and most order confirmation pages</div>
         
-        <button class="btn-secondary-add" style="margin-top: 24px;" id="ocr-browse-btn">Browse file</button>
+        <button class="btn-secondary-add add-browse-btn" id="ocr-browse-btn">Browse file</button>
         
         ${ocrState === 'parsing' ? `
           <div class="add-progress-container">
             <div class="add-progress-bar">
-              <div class="add-progress-fill" style="width: ${ocrProgress}%"></div>
+              <div class="add-progress-fill"></div>
             </div>
             <div class="add-progress-text">
               PARSING SCREENSHOT... ${ocrProgress}%
@@ -217,11 +217,11 @@ function renderCsvFlow() {
       </div>
     </div>
 
-    <div class="add-drop-zone" id="csv-drop-zone" style="margin-top: 32px;">
-      <input type="file" id="csv-file-input" style="display: none;" accept=".csv" />
+    <div class="add-drop-zone add-drop-zone-spaced" id="csv-drop-zone">
+      <input type="file" id="csv-file-input" class="file-input-hidden" accept=".csv" />
       <div class="add-drop-title">Drop your CSV here</div>
       <div class="add-drop-hint">Max 500 rows per import &middot; .csv only</div>
-      <button class="btn-secondary-add" style="margin-top: 24px;" id="csv-browse-btn">Browse file</button>
+      <button class="btn-secondary-add add-browse-btn" id="csv-browse-btn">Browse file</button>
     </div>
     
     <div class="add-form-actions">
@@ -279,9 +279,9 @@ function renderInventoryForm(isParsed = false) {
         </div>
       </div>
       
-      <div class="add-form-actions" style="display: flex; flex-direction: row; justify-content: flex-start; gap: 16px;">
-        <button class="btn btn-primary btn-full record-sale-drawer-btn" id="save-inventory-btn" style="margin: 0; flex: 1; max-width: 220px;">Save to Inventory</button>
-        <button class="btn btn-secondary-add" id="cancel-flow" style="margin: 0; flex: 1; max-width: 180px;">${isParsed ? 'Re-upload' : 'Cancel'}</button>
+      <div class="add-form-actions add-form-actions-split">
+        <button class="btn btn-primary btn-full record-sale-drawer-btn add-form-action-primary" id="save-inventory-btn">Save to Inventory</button>
+        <button class="btn btn-secondary-add add-form-action-secondary" id="cancel-flow">${isParsed ? 'Re-upload' : 'Cancel'}</button>
       </div>
     </div>
   `;
@@ -297,7 +297,7 @@ function renderSidebarContent() {
         </div>
       </div>
 
-      <span class="sidebar-section-title" style="margin-top: 48px;">TIPS</span>
+      <span class="sidebar-section-title sidebar-section-spaced">TIPS</span>
       <div class="sidebar-list">
         <div class="sidebar-item">
           <span class="sidebar-item-desc">• Include the full order confirmation page, not just the header</span>
@@ -412,7 +412,10 @@ function initOcrEvents() {
 
 async function handleOcrUpload(file) {
   if (!file || !file.type.startsWith('image/')) {
-    alert('Please select a valid image file');
+    showToast('Please select a valid image file.', {
+      variant: 'error',
+      title: 'Upload failed'
+    });
     return;
   }
 
@@ -462,7 +465,10 @@ async function finishParsing(file) {
     window.dispatchEvent(new CustomEvent('viewchange'));
   } catch (error) {
     console.error('OCR failed:', error);
-    alert('Failed to parse image. Reverting to manual entry.');
+    showToast('Failed to parse image. Reverting to manual entry.', {
+      variant: 'error',
+      title: 'Screenshot parsing'
+    });
     currentActiveView = 'manual';
     window.dispatchEvent(new CustomEvent('viewchange'));
   }
@@ -518,7 +524,10 @@ function initFormEvents() {
     const purchaseDate = document.getElementById('purchase-date').value;
 
     if (!name || cost <= 0) {
-      alert('Please enter a name and valid cost');
+      showToast('Please enter a name and valid cost.', {
+        variant: 'error',
+        title: 'Lot details'
+      });
       return;
     }
 
@@ -575,13 +584,19 @@ function initCsvEvents() {
 async function handleCsvImport(file) {
   try {
     const result = await importLotsFromCSV(file);
-    alert(`Imported ${result.success} lots successfully.`);
+    showToast(`Imported ${result.success} lots successfully.`, {
+      variant: 'success',
+      title: 'CSV import'
+    });
     if (result.success > 0) {
       resetAddLotState();
       navigate('/inventory');
     }
   } catch (err) {
-    alert('Import failed: ' + err.message);
+    showToast('Import failed: ' + err.message, {
+      variant: 'error',
+      title: 'CSV import'
+    });
   }
 }
 
@@ -596,7 +611,7 @@ function escapeHtml(text) {
 function renderMobileUpload() {
   return `
     <div class="page">
-      <div class="container">
+      <div class="container mobile-add-shell">
         
         <div class="upload-area" id="upload-area">
           <div class="upload-icon">📸</div>
@@ -604,10 +619,10 @@ function renderMobileUpload() {
           <div class="upload-hint">Amazon, Target, Walmart, etc.</div>
         </div>
         
-        <input type="file" id="file-input" accept="image/*" style="display: none;" />
+        <input type="file" id="file-input" class="file-input-hidden" accept="image/*" />
         
-        <div style="text-align: center; margin-top: var(--spacing-xl);">
-          <p class="text-muted" style="margin-bottom: var(--spacing-lg);">or</p>
+        <div class="mobile-add-actions">
+          <p class="mobile-add-divider-copy text-muted">or</p>
           <button class="btn btn-secondary btn-full" id="manual-entry-btn">
             Enter Manually
           </button>
@@ -620,10 +635,10 @@ function renderMobileUpload() {
 function renderMobileProcessing() {
   return `
     <div class="page">
-      <div class="container">
+      <div class="container mobile-add-shell">
         <h1 class="page-title">Add Lot</h1>
         
-        <div class="card">
+        <div class="card mobile-processing-card">
           <div class="ocr-progress">
             <div class="progress-spinner"></div>
             <div class="progress-text">Scanning image... ${ocrProgress}%</div>
@@ -643,7 +658,7 @@ function renderMobilePreview() {
 
   return `
     <div class="page">
-      <div class="container" style="padding: 16px;">
+      <div class="container mobile-add-shell mobile-add-preview-shell">
         
         ${mobileImagePreview ? `
           <div class="image-preview-container ${zoomClass}" id="image-preview-container">
@@ -652,18 +667,18 @@ function renderMobilePreview() {
           </div>
         ` : ''}
         
-        <div style="background: var(--surface, #1B1B1B); border-radius: 16px; padding: 20px; border: 1px solid rgba(255,255,255,0.06);">
-          <div style="margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08);">
-            <h2 style="font-size: 1.15rem; font-weight: 600; color: var(--text-primary); margin: 0;">Add Inventory</h2>
+        <div class="mobile-add-form-card">
+          <div class="mobile-add-form-head">
+            <h2 class="mobile-add-form-title">Add Inventory</h2>
           </div>
 
-          <div class="form-group" style="margin-bottom: 16px;">
+          <div class="form-group mobile-add-form-group">
             <label class="transactional-label">Item Name</label>
             <input type="text" class="form-input form-input-compact" id="lot-name" value="${escapeHtml(extractedData.name)}" placeholder="Enter item name" />
           </div>
 
-          <div class="transaction-grid" style="margin-bottom: 12px;">
-            <div class="form-group" style="margin-bottom: 0;">
+          <div class="transaction-grid mobile-add-transaction-grid">
+            <div class="form-group mobile-add-grid-field">
               <label class="transactional-label">Quantity</label>
               <div class="quantity-stepper">
                 <button type="button" class="stepper-btn" id="decrease-qty">-</button>
@@ -671,29 +686,29 @@ function renderMobilePreview() {
                 <button type="button" class="stepper-btn" id="increase-qty">+</button>
               </div>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
+            <div class="form-group mobile-add-grid-field">
               <label class="transactional-label">Total Cost ($)</label>
               <input type="number" class="form-input form-input-compact transactional-input-emphasized" id="lot-cost" value="${cost || ''}" placeholder="0.00" step="0.01" min="0" inputmode="decimal" />
             </div>
           </div>
 
-          <div class="form-group" style="margin-bottom: 16px;">
+          <div class="form-group mobile-add-form-group">
             <label class="transactional-label">Cost Per Unit</label>
-            <div class="form-input form-input-compact" id="cost-per-unit-display" style="background: rgba(255,255,255,0.02); color: var(--text-secondary); pointer-events: none; user-select: none; display: flex; align-items: center; justify-content: center;">
+            <div class="form-input form-input-compact mobile-add-readonly" id="cost-per-unit-display">
               $${costPerUnit}
             </div>
-            <span style="font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 4px; display: block;">Auto-calculated</span>
+            <span class="mobile-add-inline-help">Auto-calculated</span>
           </div>
 
-          <div class="form-group date-group" style="margin-bottom: 0;">
+          <div class="form-group date-group mobile-add-grid-field">
             <label class="transactional-label">Purchase Date</label>
             <input type="date" class="form-input form-input-compact" id="lot-purchase-date" value="${today}" />
           </div>
 
-          <button class="btn btn-transactional-primary btn-full" id="save-lot-btn" style="margin-top: 20px;">
+          <button class="btn btn-transactional-primary btn-full mobile-add-primary-btn" id="save-lot-btn">
             Save to Inventory
           </button>
-          <button id="cancel-btn" style="display: block; width: 100%; margin-top: 12px; padding: 10px; background: none; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: var(--text-secondary); font-size: 0.85rem; font-weight: 500; cursor: pointer; font-family: inherit;">
+          <button id="cancel-btn" class="mobile-add-cancel-btn" type="button">
             Cancel
           </button>
         </div>
@@ -704,7 +719,10 @@ function renderMobilePreview() {
 
 async function handleMobileFileUpload(file) {
   if (!file || !file.type.startsWith('image/')) {
-    alert('Please select a valid image file');
+    showToast('Please select a valid image file.', {
+      variant: 'error',
+      title: 'Upload failed'
+    });
     return;
   }
 
@@ -734,7 +752,10 @@ async function handleMobileFileUpload(file) {
     window.dispatchEvent(new CustomEvent('viewchange'));
   } catch (error) {
     console.error('OCR failed:', error);
-    alert('Failed to process image. Please try again or enter manually.');
+    showToast('Failed to process image. Please try again or enter manually.', {
+      variant: 'error',
+      title: 'Screenshot parsing'
+    });
     mobileState = 'upload';
     window.dispatchEvent(new CustomEvent('viewchange'));
   }
@@ -752,7 +773,10 @@ function mobileSaveLotAndNavigate() {
   const purchaseDate = purchaseDateInput?.value || new Date().toISOString().split('T')[0];
 
   if (cost <= 0) {
-    alert('Please enter a valid cost');
+    showToast('Please enter a valid cost.', {
+      variant: 'error',
+      title: 'Lot details'
+    });
     return;
   }
 

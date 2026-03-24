@@ -16,6 +16,7 @@ import {
   updateChurnCard,
   updateChurningOrder
 } from '../services/storage.js';
+import { confirmAction, showToast } from '../services/feedback.js';
 
 const FILTER_OPTIONS = [
   { key: 'active', label: 'Active' },
@@ -109,6 +110,12 @@ function getSelectedCardId(cards) {
   return orderDraft.cardId || cards[0]?.id || '';
 }
 
+function getOrderStatusLabel(order) {
+  if (order.paid) return 'Paid';
+  if (isChurningTrackingOverdue(order)) return 'Tracking overdue';
+  return 'Open';
+}
+
 function renderMetricCard(label, value, detail, accentClass = '') {
   return `
     <div class="churn-stat-card ${accentClass}">
@@ -171,8 +178,8 @@ function renderWallet(cards, orders) {
         <div class="churn-wallet-footer">
           <span>${linkedOrders} linked order${linkedOrders === 1 ? '' : 's'}</span>
           <div class="churn-inline-actions">
-            <button class="churn-text-btn" data-edit-card="${card.id}">Edit</button>
-            <button class="churn-text-btn danger" data-delete-card="${card.id}">Delete</button>
+            <button class="churn-text-btn" type="button" data-edit-card="${card.id}">Edit</button>
+            <button class="churn-text-btn danger" type="button" data-delete-card="${card.id}">Delete</button>
           </div>
         </div>
       </article>
@@ -298,8 +305,10 @@ function renderFilters(orders) {
     <div class="churn-filter-row">
       ${FILTER_OPTIONS.map((filter) => `
         <button
+          type="button"
           class="churn-filter-chip ${selectedFilter === filter.key ? 'active' : ''}"
           data-churn-filter="${filter.key}"
+          aria-pressed="${selectedFilter === filter.key ? 'true' : 'false'}"
         >
           ${filter.label}
           <span>${getFilterCount(filter.key, orders)}</span>
@@ -340,6 +349,7 @@ function renderOrderCard(order) {
           <div class="churn-order-meta">
             ${escapeHtml(order.cardName || 'Unknown Card')} · ${Number(order.cashbackRate || 0).toFixed(2)}% · Bought ${formatDate(order.purchaseDate, 'long')}
           </div>
+          <div class="churn-order-status-copy">${getOrderStatusLabel(order)}</div>
         </div>
         <div class="churn-order-profit">
           <span>Net profit</span>
@@ -367,13 +377,13 @@ function renderOrderCard(order) {
       </div>
 
       <div class="churn-status-row">
-        <button class="churn-status-pill ${order.trackingUploaded ? 'done' : ''}" data-toggle-status="trackingUploaded" data-order-id="${order.id}">
+        <button class="churn-status-pill ${order.trackingUploaded ? 'done' : ''}" type="button" data-toggle-status="trackingUploaded" data-order-id="${order.id}" aria-pressed="${order.trackingUploaded ? 'true' : 'false'}">
           Tracking uploaded
         </button>
-        <button class="churn-status-pill ${order.delivered ? 'done' : ''}" data-toggle-status="delivered" data-order-id="${order.id}">
+        <button class="churn-status-pill ${order.delivered ? 'done' : ''}" type="button" data-toggle-status="delivered" data-order-id="${order.id}" aria-pressed="${order.delivered ? 'true' : 'false'}">
           Delivered
         </button>
-        <button class="churn-status-pill ${order.paid ? 'done' : ''}" data-toggle-status="paid" data-order-id="${order.id}">
+        <button class="churn-status-pill ${order.paid ? 'done' : ''}" type="button" data-toggle-status="paid" data-order-id="${order.id}" aria-pressed="${order.paid ? 'true' : 'false'}">
           Paid
         </button>
       </div>
@@ -384,11 +394,34 @@ function renderOrderCard(order) {
           ${!order.paid ? '<span class="churn-flag">Awaiting payment</span>' : '<span class="churn-flag success">Settled</span>'}
         </div>
         <div class="churn-inline-actions">
-          <button class="churn-text-btn" data-edit-order="${order.id}">Edit</button>
-          <button class="churn-text-btn danger" data-delete-order="${order.id}">Delete</button>
+          <button class="churn-text-btn" type="button" data-edit-order="${order.id}">Edit</button>
+          <button class="churn-text-btn danger" type="button" data-delete-order="${order.id}">Delete</button>
         </div>
       </div>
     </article>
+  `;
+}
+
+function renderWalletColumn(cards, orders) {
+  return `
+    <aside class="churn-side-column">
+      <section class="churn-panel">
+        ${renderWallet(cards, orders)}
+      </section>
+      ${renderCardForm()}
+    </aside>
+  `;
+}
+
+function renderOrdersColumn(cards, orders) {
+  const filteredOrders = filterOrders(orders, selectedFilter);
+
+  return `
+    <div class="churn-main-column">
+      ${renderOrderComposer(cards)}
+      ${renderFilters(orders)}
+      ${renderOrderList(filteredOrders)}
+    </div>
   `;
 }
 
@@ -399,7 +432,9 @@ export function ChurningView() {
   const monthlyOrders = getChurningOrdersForMonth(orders);
   const monthlyStats = calculateChurningStats(monthlyOrders);
   const allStats = calculateChurningStats(orders);
-  const filteredOrders = filterOrders(orders, selectedFilter);
+  const isDesktopView = window.innerWidth >= 1024;
+  const ordersColumn = renderOrdersColumn(cards, orders);
+  const walletColumn = renderWalletColumn(cards, orders);
 
   return `
     <div class="page churning-page">
@@ -422,18 +457,7 @@ export function ChurningView() {
         ${renderSignalBar(allStats)}
 
         <div class="churn-layout">
-          <aside class="churn-side-column">
-            <section class="churn-panel">
-              ${renderWallet(cards, orders)}
-            </section>
-            ${renderCardForm()}
-          </aside>
-
-          <div class="churn-main-column">
-            ${renderOrderComposer(cards)}
-            ${renderFilters(orders)}
-            ${renderOrderList(filteredOrders)}
-          </div>
+          ${isDesktopView ? walletColumn + ordersColumn : ordersColumn + walletColumn}
         </div>
       </div>
     </div>
@@ -512,7 +536,10 @@ export function initChurningEvents() {
     const cashbackType = document.getElementById('churn-card-type')?.value || 'statement-credit';
 
     if (!name || Number(cashbackRate) <= 0) {
-      alert('Add a card name and a cashback rate greater than 0.');
+      showToast('Add a card name and a cashback rate greater than 0.', {
+        variant: 'error',
+        title: 'Card details'
+      });
       return;
     }
 
@@ -536,7 +563,10 @@ export function initChurningEvents() {
     const purchaseDate = document.getElementById('churn-purchase-date')?.value || todayStr();
 
     if (!store || !cardId) {
-      alert('Choose a store and card before saving an order.');
+      showToast('Choose a store and card before saving an order.', {
+        variant: 'error',
+        title: 'Order details'
+      });
       return;
     }
 
@@ -544,7 +574,10 @@ export function initChurningEvents() {
     const reimbursementAmount = dollarsToCents(reimbursementAmountInput);
 
     if (purchaseAmount <= 0) {
-      alert('Enter a purchase amount greater than 0.');
+      showToast('Enter a purchase amount greater than 0.', {
+        variant: 'error',
+        title: 'Order details'
+      });
       return;
     }
 
@@ -580,13 +613,22 @@ export function initChurningEvents() {
   });
 
   document.querySelectorAll('[data-delete-card]').forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const cardId = button.dataset.deleteCard;
-      if (!confirm('Delete this card from your wallet?')) return;
+      const shouldDelete = await confirmAction({
+        title: 'Delete card',
+        message: 'Delete this card from your wallet?',
+        confirmLabel: 'Delete card',
+        tone: 'danger'
+      });
+      if (!shouldDelete) return;
 
       const deleted = deleteChurnCard(cardId);
       if (!deleted) {
-        alert('This card is already linked to existing orders and cannot be deleted yet.');
+        showToast('This card is already linked to existing orders and cannot be deleted yet.', {
+          variant: 'error',
+          title: 'Delete blocked'
+        });
         return;
       }
 
@@ -605,9 +647,15 @@ export function initChurningEvents() {
   });
 
   document.querySelectorAll('[data-delete-order]').forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const orderId = button.dataset.deleteOrder;
-      if (!confirm('Delete this churning order?')) return;
+      const shouldDelete = await confirmAction({
+        title: 'Delete order',
+        message: 'Delete this churning order?',
+        confirmLabel: 'Delete order',
+        tone: 'danger'
+      });
+      if (!shouldDelete) return;
 
       deleteChurningOrder(orderId);
 

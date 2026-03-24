@@ -42,6 +42,98 @@ function getCssVar(name, fallback) {
   return value || fallback;
 }
 
+function getSelectedRangeLabel(range = selectedRange) {
+  if (range === '7d') return 'last 7 days';
+  if (range === '90d') return 'last 90 days';
+  if (range === 'all') return 'last 12 months';
+  return 'last 30 days';
+}
+
+function getDashboardRangeData(range = selectedRange) {
+  const now = new Date();
+  now.setHours(23, 59, 59, 999);
+
+  if (range === 'all') {
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - 364);
+    startDate.setHours(0, 0, 0, 0);
+
+    const prevStart = new Date(startDate);
+    prevStart.setDate(prevStart.getDate() - 365);
+    const prevEnd = new Date(startDate);
+    prevEnd.setDate(prevEnd.getDate() - 1);
+    prevEnd.setHours(23, 59, 59, 999);
+
+    return {
+      salesData: getSalesByDateRange(startDate, now),
+      prevSalesData: getSalesByDateRange(prevStart, prevEnd)
+    };
+  }
+
+  const days = range === '7d' ? 6 : range === '90d' ? 89 : 29;
+  const startDate = new Date(now);
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const prevStartDate = new Date(startDate);
+  prevStartDate.setDate(prevStartDate.getDate() - (days + 1));
+  const prevEndDate = new Date(startDate);
+  prevEndDate.setDate(prevEndDate.getDate() - 1);
+  prevEndDate.setHours(23, 59, 59, 999);
+
+  return {
+    salesData: getSalesByDateRange(startDate, now),
+    prevSalesData: getSalesByDateRange(prevStartDate, prevEndDate)
+  };
+}
+
+function getDesktopRevenueSummary(salesData, prevSalesData, range = selectedRange) {
+  const stats = calculateMonthlyStats(salesData);
+  const prevStats = calculateMonthlyStats(prevSalesData);
+  const margin = stats.totalRevenue > 0 ? Math.round((stats.totalProfit / stats.totalRevenue) * 100) : 0;
+  const avgSaleValue = salesData.length > 0 ? Math.round(stats.totalRevenue / salesData.length) : 0;
+  const rangeLabel = getSelectedRangeLabel(range);
+
+  if (salesData.length === 0) {
+    return {
+      title: `No sales recorded in the ${rangeLabel}`,
+      text: `The revenue chart is empty for the ${rangeLabel}.`,
+      ariaLabel: `Revenue chart with no sales recorded in the ${rangeLabel}.`
+    };
+  }
+
+  const trend = calculateTrend(stats.totalRevenue, prevStats.totalRevenue);
+  const trendDirection = trend.direction === 'up' ? 'up' : trend.direction === 'down' ? 'down' : 'flat';
+  return {
+    title: `${salesData.length} sale${salesData.length === 1 ? '' : 's'} in the ${rangeLabel}`,
+    text: `${formatCurrency(stats.totalRevenue)} in revenue, ${formatCurrency(stats.totalProfit, true)} net profit, ${margin}% margin, average sale ${formatCurrency(avgSaleValue)}, and revenue trend ${trendDirection} versus the previous comparison window.`,
+    ariaLabel: `Revenue chart for the ${rangeLabel}: ${salesData.length} sales, ${formatCurrency(stats.totalRevenue)} in revenue, ${formatCurrency(stats.totalProfit, true)} net profit, ${margin}% margin, and revenue trend ${trendDirection}.`
+  };
+}
+
+function getSegmentationSummary(chartStats, totalSales, range = selectedRange) {
+  const rangeLabel = getSelectedRangeLabel(range);
+
+  if (!chartStats.length || totalSales === 0) {
+    return {
+      title: `No channel mix available for the ${rangeLabel}`,
+      text: `The segmentation chart is empty for the ${rangeLabel}.`,
+      ariaLabel: `Segmentation chart with no sales recorded in the ${rangeLabel}.`
+    };
+  }
+
+  const leader = chartStats[0];
+  const leaderLabel = leader.platform.charAt(0).toUpperCase() + leader.platform.slice(1);
+  const revenueTotal = chartStats.reduce((sum, item) => sum + (item.revenue || 0), 0);
+  const share = revenueTotal > 0 ? Math.round((leader.revenue / revenueTotal) * 100) : 0;
+
+  return {
+    title: `${chartStats.length} channel${chartStats.length === 1 ? '' : 's'} active in the ${rangeLabel}`,
+    text: `${leaderLabel} leads with ${formatCurrency(leader.revenue)} across ${leader.count} sale${leader.count === 1 ? '' : 's'}, representing ${share}% of recorded revenue.`,
+    ariaLabel: `Segmentation chart for the ${rangeLabel}: ${chartStats.length} active channels. ${leaderLabel} leads with ${formatCurrency(leader.revenue)} across ${leader.count} sales and ${share}% of revenue.`
+  };
+}
+
 export function DesktopDashboardView() {
   // Clean up stale chart references when the view re-renders after navigation
   if (desktopChartInstance) {
@@ -136,6 +228,8 @@ export function DesktopDashboardView() {
       return dateB - dateA;
     })
     .slice(0, 7);
+  const { salesData: rangeSalesData, prevSalesData: prevRangeSalesData } = getDashboardRangeData(selectedRange);
+  const revenueSummary = getDesktopRevenueSummary(rangeSalesData, prevRangeSalesData, selectedRange);
 
   return `
     <div class="desktop-dashboard vision-desktop-dashboard">
@@ -161,7 +255,7 @@ export function DesktopDashboardView() {
             <div class="header-titles">
               <h3 class="section-title">Sales Revenue</h3>
               <div id="revenue-dynamic-value" class="revenue-hero-value">$0.00</div>
-              <div id="revenue-dynamic-trend" class="kpi-pill-trend" style="margin-top: 8px;"></div>
+              <div id="revenue-dynamic-trend" class="kpi-pill-trend dashboard-revenue-trend"></div>
             </div>
             <div class="date-range-filter">
               <button class="filter-btn ${selectedRange === '7d' ? 'active' : ''}" data-range="7d">7D</button>
@@ -171,7 +265,11 @@ export function DesktopDashboardView() {
             </div>
           </div>
           <div class="chart-container">
-            <canvas id="desktop-revenue-chart"></canvas>
+            <canvas id="desktop-revenue-chart" role="img" aria-label="${revenueSummary.ariaLabel}">${revenueSummary.text}</canvas>
+          </div>
+          <div class="chart-summary desktop-chart-summary">
+            <div class="chart-summary-title" id="desktop-revenue-summary-title">${revenueSummary.title}</div>
+            <p class="chart-summary-text" id="desktop-revenue-summary-text">${revenueSummary.text}</p>
           </div>
         </div>
 
@@ -179,7 +277,7 @@ export function DesktopDashboardView() {
           <div class="section-header">
             <h3 class="section-title">Segmentation</h3>
           </div>
-          ${renderSegmentation(currentMonthSales, previousMonthSales)}
+          ${renderSegmentation(rangeSalesData, prevRangeSalesData)}
         </div>
       </div>
 
@@ -204,8 +302,7 @@ function renderPillTrend(trend) {
   const cls = trend.direction === 'up' ? 'trend-up' : trend.direction === 'down' ? 'trend-down' : 'trend-neutral';
   // Use a slight gap if arrow exists
   const arrowHtml = arrow ? ` ${arrow}` : '';
-  const isInf = trend.value === '∞';
-  const valHtml = isInf ? '<span style="font-size: 1.8em; line-height: 1; vertical-align: -0.05em;">∞</span>&thinsp;%' : `${trend.value}%`;
+  const valHtml = formatTrendPercent(trend.value);
   return `<span class="kpi-pill-trend"><span class="${cls}">${valHtml}${arrowHtml}</span> vs Last 30D</span>`;
 }
 
@@ -271,18 +368,6 @@ function generateSegmentationLegendHTML(salesData, prevSalesData) {
       prevStats[platform].revenue += (Number(sale.totalPrice) || 0);
     });
   }
-
-  const colors = {
-    amazon: '#FBBF24',
-    shopify: '#2DD4BF',
-    facebook: '#8B5CF6',
-    ebay: '#EF4444',
-    walmart: '#0071CE',
-    target: '#CC0000',
-    woot: '#679F1F',
-    bestbuy: '#FFF200',
-    other: '#71717A'
-  };
 
   const icons = {
     amazon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 21c-2.4 1.3-6.5 2-10 2-4.5 0-8.2-1.3-11-2.5l1-2.5c2.4 1.1 5.4 2 8.5 2 3.8 0 7.2-.6 9.5-1.5l2 2.5z"/></svg>`,
@@ -362,13 +447,13 @@ function generateSegmentationLegendHTML(salesData, prevSalesData) {
 
     const arrow = realTrendObj.direction === 'up' ? '↑' : realTrendObj.direction === 'down' ? '↓' : '';
     const trendCls = realTrendObj.direction === 'up' ? 'trend-up' : realTrendObj.direction === 'down' ? 'trend-down' : 'trend-neutral';
-    const trendText = realTrendObj.value === '∞' ? '<span style="font-size: 1.8em; line-height: 1; vertical-align: -0.05em;">∞</span>&thinsp;%' : `${realTrendObj.value}%`;
+    const trendText = formatTrendPercent(realTrendObj.value);
     const arrowHtml = arrow ? ` ${arrow}` : '';
 
     return `
-      <div class="seg-channel-row" data-chart-index="${index}" style="transition: background 0.2s; border-radius: 6px; padding: 12px 8px; margin: 0 -8px;">
+      <div class="seg-channel-row" data-chart-index="${index}">
         <span class="seg-channel-name">
-          <span class="seg-channel-icon" style="color: ${colors[platform] || colors.other};">${icons[platform] || icons.other}</span>
+          <span class="seg-channel-icon ${getSegPlatformClass(platform)}">${icons[platform] || icons.other}</span>
           ${getLabel(platform)}
         </span>
         <span class="seg-channel-number">${stats.count}</span>
@@ -381,16 +466,21 @@ function generateSegmentationLegendHTML(salesData, prevSalesData) {
 }
 
 function renderSegmentation(salesData, prevSalesData) {
-  const { totalSales, channelRowsHTML } = generateSegmentationLegendHTML(salesData, prevSalesData);
+  const { totalSales, channelRowsHTML, chartStats } = generateSegmentationLegendHTML(salesData, prevSalesData);
+  const summary = getSegmentationSummary(chartStats, totalSales, selectedRange);
 
   return `
     <div class="segmentation-container">
       <div class="pie-container">
-        <canvas id="segmentation-pie-chart"></canvas>
+        <canvas id="segmentation-pie-chart" role="img" aria-label="${summary.ariaLabel}">${summary.text}</canvas>
         <div class="pie-center-text">
           <span class="pie-center-value">${totalSales.toLocaleString()}</span>
           <span class="pie-center-label">total sales</span>
         </div>
+      </div>
+      <div class="chart-summary compact" id="segmentation-summary">
+        <div class="chart-summary-title" id="segmentation-summary-title">${summary.title}</div>
+        <p class="chart-summary-text" id="segmentation-summary-text">${summary.text}</p>
       </div>
       <div class="seg-channels-header">
         <span>Channels</span>
@@ -546,76 +636,47 @@ function calculateTrend(current, previous) {
   return { direction: 'neutral', value: '0' };
 }
 
+function renderInfinityPercent() {
+  return '<span class="infinity-glyph">∞</span>&thinsp;%';
+}
+
+function formatTrendPercent(value) {
+  return value === 'âˆž' || value === '∞' ? renderInfinityPercent() : `${value}%`;
+}
+
+function getSegPlatformClass(platform) {
+  const supportedPlatforms = new Set(['amazon', 'shopify', 'facebook', 'ebay', 'whatnot']);
+  return supportedPlatforms.has(platform) ? `platform-${platform}` : 'platform-other';
+}
+
+function setSegmentationActiveRow(index = null) {
+  document.querySelectorAll('.seg-channel-row').forEach(row => {
+    const rowIndex = Number(row.dataset.chartIndex);
+    row.classList.toggle('is-active', index !== null && rowIndex === index);
+  });
+}
+
 function initDesktopRevenueChart() {
   const canvas = document.getElementById('desktop-revenue-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  let salesData;
-  let prevSalesData = [];
-  const now = new Date();
-  now.setHours(23, 59, 59, 999);
-
-  if (selectedRange === 'all') {
-    const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - 364); // 365 days including today
-    startDate.setHours(0, 0, 0, 0);
-    salesData = getSalesByDateRange(startDate, now);
-
-    // For 'all', previous period is the year before that
-    const prevStart = new Date(startDate);
-    prevStart.setDate(prevStart.getDate() - 365);
-    const prevEnd = new Date(startDate);
-    prevEnd.setDate(prevEnd.getDate() - 1);
-    prevEnd.setHours(23, 59, 59, 999);
-    prevSalesData = getSalesByDateRange(prevStart, prevEnd);
-
-  } else {
-    const days = selectedRange === '7d' ? 6 : selectedRange === '90d' ? 89 : 29;
-    const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - days);
-    startDate.setHours(0, 0, 0, 0);
-    salesData = getSalesByDateRange(startDate, now);
-
-    // Calculate strict previous period for strict trend matching
-    const prevStartDate = new Date(startDate);
-    prevStartDate.setDate(prevStartDate.getDate() - (days + 1));
-    const prevEndDate = new Date(startDate);
-    prevEndDate.setDate(prevEndDate.getDate() - 1);
-    prevEndDate.setHours(23, 59, 59, 999);
-    prevSalesData = getSalesByDateRange(prevStartDate, prevEndDate);
-  }
+  const { salesData, prevSalesData } = getDashboardRangeData(selectedRange);
 
   desktopChartData = aggregateSalesByDay(salesData, selectedRange);
   const chartBuckets = aggregateSalesForChart(salesData, selectedRange);
   const { labels, revenues } = chartBuckets;
-  if (!labels?.length || !revenues?.length) return;
-
-  const maxRevenue = Math.max(...revenues);
-  const yMax = maxRevenue > 0 ? Math.ceil(maxRevenue * 1.15) : 100;
-
-  if (desktopChartInstance) desktopChartInstance.destroy();
-
-  const ctx = canvas.getContext('2d');
-  const axisTicks = getCssVar('--chart-axis-text', 'rgba(234, 230, 224, 0.55)');
-  const axisGrid = getCssVar('--chart-grid-line', 'rgba(234, 230, 224, 0.08)');
-
-  // Use solid color strings (not CanvasGradient) so Chart.js can smoothly interpolate during fade transitions
-  const barColors = revenues.map(v => v > 0 ? 'rgba(45, 212, 191, 1)' : 'rgba(255,255,255,0.04)');
-  const barHoverColors = revenues.map(v => v > 0 ? 'rgba(94, 234, 212, 1)' : 'rgba(255,255,255,0.06)');
-
-  // Create faded colors for when a different bar is hovered
-  const barFadedColors = revenues.map(v => v > 0 ? 'rgba(45, 212, 191, 0.25)' : 'rgba(255,255,255,0.02)');
-
-  if (selectedBarIndex === null || selectedBarIndex >= labels.length) {
-    selectedBarIndex = labels.length - 1;
-  }
-
-  // Update dynamic revenue readout to match time range total, completely decoupled from bar hover/click
   const dynamicValEl = document.getElementById('revenue-dynamic-value');
   const dynamicTrendEl = document.getElementById('revenue-dynamic-trend');
+  const summaryTitleEl = document.getElementById('desktop-revenue-summary-title');
+  const summaryTextEl = document.getElementById('desktop-revenue-summary-text');
+  const revenueSummary = getDesktopRevenueSummary(salesData, prevSalesData, selectedRange);
+  const totalRevenueRange = salesData.reduce((sum, { sale }) => sum + (Number(sale.totalPrice) || 0), 0);
+
+  if (summaryTitleEl) summaryTitleEl.textContent = revenueSummary.title;
+  if (summaryTextEl) summaryTextEl.textContent = revenueSummary.text;
+  canvas.setAttribute('aria-label', revenueSummary.ariaLabel);
 
   if (dynamicValEl) {
-    const totalRevenueRange = salesData.reduce((sum, { sale }) => sum + (Number(sale.totalPrice) || 0), 0);
     dynamicValEl.textContent = '$' + (totalRevenueRange / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     // Calculate and exact inject trend string using KPI pill format logic
@@ -629,11 +690,32 @@ function initDesktopRevenueChart() {
 
       const periodLabel = selectedRange === '7d' ? 'Last 7D' : selectedRange === '30d' ? 'Last 30D' : selectedRange === '90d' ? 'Last 90D' : 'Previous Year';
 
-      const isInf = trendData.value === '∞';
-      const valHtml = isInf ? '<span style="font-size: 1.8em; line-height: 1; vertical-align: -0.05em;">∞</span>&thinsp;%' : `${trendData.value}%`;
+      const valHtml = formatTrendPercent(trendData.value);
 
       dynamicTrendEl.innerHTML = `<span class="${cls}">${valHtml}${arrowHtml}</span> vs ${periodLabel}`;
     }
+  }
+
+  if (!labels?.length || !revenues?.length) return;
+
+  const maxRevenue = Math.max(...revenues);
+  const yMax = maxRevenue > 0 ? Math.ceil(maxRevenue * 1.15) : 100;
+
+  if (desktopChartInstance) desktopChartInstance.destroy();
+
+  const ctx = canvas.getContext('2d');
+  const axisTicks = getCssVar('--chart-axis-text', 'rgba(234, 230, 224, 0.55)');
+  const axisGrid = getCssVar('--chart-grid-line', 'rgba(234, 230, 224, 0.08)');
+
+  // Use solid color strings (not CanvasGradient) so Chart.js can smoothly interpolate during fade transitions
+  const barColors = revenues.map(v => v > 0 ? 'rgba(35, 184, 165, 0.88)' : 'rgba(255,255,255,0.04)');
+  const barHoverColors = revenues.map(v => v > 0 ? 'rgba(74, 204, 184, 0.94)' : 'rgba(255,255,255,0.06)');
+
+  // Create faded colors for when a different bar is hovered
+  const barFadedColors = revenues.map(v => v > 0 ? 'rgba(35, 184, 165, 0.22)' : 'rgba(255,255,255,0.02)');
+
+  if (selectedBarIndex === null || selectedBarIndex >= labels.length) {
+    selectedBarIndex = labels.length - 1;
   }
 
   const barCount = labels.length;
@@ -670,23 +752,6 @@ function initDesktopRevenueChart() {
     if (!tooltipEl) {
       tooltipEl = document.createElement('div');
       tooltipEl.classList.add('bklit-custom-tooltip');
-      tooltipEl.style.cssText = `
-        position: absolute;
-        background: rgba(24, 24, 27, 0.65);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 14px 16px;
-        pointer-events: none;
-        transition: opacity 0.2s ease, left 0.15s ease, top 0.15s ease;
-        transform: translate(-50%, -100%);
-        margin-top: -12px;
-        min-width: 140px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-        z-index: 100;
-        opacity: 0;
-      `;
       chart.canvas.parentNode.appendChild(tooltipEl);
     }
 
@@ -701,13 +766,13 @@ function initDesktopRevenueChart() {
       const val = '$' + dataPoint.raw.toLocaleString('en-US');
 
       tooltipEl.innerHTML = `
-        <div style="color: #fff; font-size: 13px; font-weight: 600; margin-bottom: 12px; font-family: var(--font-mono);">${dateLabel}</div>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px; font-family: var(--font-mono);">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="width: 8px; height: 8px; border-radius: 50%; background: #38BDF8; flex-shrink: 0;"></div>
-            <span style="color: #A1A1AA; font-size: 13px;">revenue</span>
+        <div class="chart-tooltip-date">${dateLabel}</div>
+        <div class="chart-tooltip-row">
+          <div class="chart-tooltip-series">
+            <div class="chart-tooltip-dot"></div>
+            <span class="chart-tooltip-label">revenue</span>
           </div>
-          <span style="color: #fff; font-size: 14px; font-weight: 500;">${val}</span>
+          <span class="chart-tooltip-amount">${val}</span>
         </div>
       `;
     }
@@ -722,23 +787,6 @@ function initDesktopRevenueChart() {
   if (!xAxisPill) {
     xAxisPill = document.createElement('div');
     xAxisPill.classList.add('bklit-xaxis-pill');
-    xAxisPill.style.cssText = `
-      position: absolute;
-      bottom: 0;
-      background: #fff;
-      color: #000;
-      font-size: 11px;
-      font-weight: 500;
-      font-family: var(--font-mono);
-      padding: 4px 12px;
-      border-radius: 12px;
-      pointer-events: none;
-      opacity: 0;
-      transform: translateX(-50%) translateY(4px);
-      transition: opacity 0.2s ease, left 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 10;
-      white-space: nowrap;
-    `;
     canvas.parentNode.appendChild(xAxisPill);
   }
 
@@ -919,7 +967,7 @@ function attachLegendHoverEvents(chartInstance, counts, labels, bgColors, totalS
         chartInstance.data.datasets[0].backgroundColor = bgColors.map((color, i) => i === index ? color : (color.length === 7 ? color + '4D' : color));
         chartInstance.setActiveElements([{ datasetIndex: 0, index }]);
         chartInstance.update();
-        newRow.style.background = 'rgba(255,255,255,0.06)';
+        setSegmentationActiveRow(index);
 
         if (pieCenterValEl && pieCenterLabelEl) {
           const targetCount = counts[index];
@@ -937,7 +985,7 @@ function attachLegendHoverEvents(chartInstance, counts, labels, bgColors, totalS
         chartInstance.setActiveElements([]);
         chartInstance.update();
       }
-      newRow.style.background = '';
+      setSegmentationActiveRow();
 
       if (pieCenterValEl && pieCenterLabelEl && currentCenterVal !== totalSales) {
         animateValue(pieCenterValEl, currentCenterVal, totalSales, 300);
@@ -952,11 +1000,17 @@ function initSegmentationChart(salesData, prevSalesData) {
   if (!canvas || typeof Chart === 'undefined') return;
 
   const { totalSales, channelRowsHTML, chartStats } = generateSegmentationLegendHTML(salesData, prevSalesData);
+  const summary = getSegmentationSummary(chartStats, totalSales, selectedRange);
 
   const segListEl = document.getElementById('seg-channels-list');
   if (segListEl && segmentationChartInstance) {
     segListEl.innerHTML = channelRowsHTML; // Inject dynamically if it exists
   }
+  const segSummaryTitleEl = document.getElementById('segmentation-summary-title');
+  const segSummaryTextEl = document.getElementById('segmentation-summary-text');
+  if (segSummaryTitleEl) segSummaryTitleEl.textContent = summary.title;
+  if (segSummaryTextEl) segSummaryTextEl.textContent = summary.text;
+  canvas.setAttribute('aria-label', summary.ariaLabel);
 
   currentCenterVal = totalSales;
   const pieCenterValEl = document.querySelector('.pie-center-value');
@@ -968,7 +1022,7 @@ function initSegmentationChart(salesData, prevSalesData) {
   const labels = chartStats.map(s => s.platform.charAt(0).toUpperCase() + s.platform.slice(1));
   const data = chartStats.map(s => s.revenue);
   const counts = chartStats.map(s => s.count);
-  const colors = { amazon: '#FBBF24', shopify: '#2DD4BF', facebook: '#8B5CF6', ebay: '#EF4444', whatnot: '#F97316', other: '#71717A' };
+  const colors = { amazon: '#d9a441', shopify: '#4fb89b', facebook: '#7c8fce', ebay: '#ce7562', whatnot: '#d8894d', other: '#6d6d73' };
   const bgColors = chartStats.map(s => colors[s.platform] || colors.other);
 
   if (segmentationChartInstance) {
@@ -977,12 +1031,10 @@ function initSegmentationChart(salesData, prevSalesData) {
     segmentationChartInstance.data.datasets[0].backgroundColor = bgColors;
 
     segmentationChartInstance.options.onHover = (event, activeElements) => {
-      document.querySelectorAll('.seg-channel-row').forEach(row => row.style.background = '');
+      setSegmentationActiveRow();
       if (activeElements.length > 0) {
         const index = activeElements[0].index;
-        document.querySelectorAll(`.seg-channel-row[data-chart-index="${index}"]`).forEach(row => {
-          row.style.background = 'rgba(255,255,255,0.06)';
-        });
+        setSegmentationActiveRow(index);
 
         segmentationChartInstance.data.datasets[0].backgroundColor = bgColors.map((color, i) => i === index ? color : (color.length === 7 ? color + '4D' : color));
         segmentationChartInstance.update();
@@ -1043,12 +1095,10 @@ function initSegmentationChart(salesData, prevSalesData) {
       },
       responsive: true,
       onHover: (event, activeElements) => {
-        document.querySelectorAll('.seg-channel-row').forEach(row => row.style.background = '');
+        setSegmentationActiveRow();
         if (activeElements.length > 0) {
           const index = activeElements[0].index;
-          document.querySelectorAll(`.seg-channel-row[data-chart-index="${index}"]`).forEach(row => {
-            row.style.background = 'rgba(255,255,255,0.06)';
-          });
+          setSegmentationActiveRow(index);
 
           segmentationChartInstance.data.datasets[0].backgroundColor = bgColors.map((color, i) => i === index ? color : (color.length === 7 ? color + '4D' : color));
           segmentationChartInstance.update();

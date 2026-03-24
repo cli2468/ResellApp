@@ -5,6 +5,7 @@ import { calculateMonthlyStats, formatCurrency, getMonthName, calculateChurningS
 import { aggregateSalesByDay, getSalesForDay } from '../services/chartData.js';
 import { animateCountUp } from '../utils/animations.js';
 import { navigate } from '../router.js';
+import { confirmAction } from '../services/feedback.js';
 
 // Current selected time range for dashboard
 let selectedRange = null;
@@ -106,6 +107,34 @@ function getContextualHeader() {
   return 'Last 30 Days';
 }
 
+function getRangeLabel(range = selectedRange) {
+  if (range === '7d') return 'last 7 days';
+  if (range === '90d') return 'last 90 days';
+  if (range === 'all') return 'all time';
+  return 'last 30 days';
+}
+
+function getRevenueChartSummary(salesData, range = selectedRange) {
+  const stats = calculateMonthlyStats(salesData);
+  const margin = stats.totalRevenue > 0 ? Math.round((stats.totalProfit / stats.totalRevenue) * 100) : 0;
+  const rangeLabel = getRangeLabel(range);
+
+  if (salesData.length === 0) {
+    return {
+      title: `No sales recorded in the ${rangeLabel}`,
+      text: `The revenue chart is empty for the ${rangeLabel}.`,
+      ariaLabel: `Revenue chart with no sales recorded in the ${rangeLabel}.`
+    };
+  }
+
+  const avgSaleValue = Math.round(stats.totalRevenue / salesData.length);
+  return {
+    title: `${salesData.length} sale${salesData.length === 1 ? '' : 's'} in the ${rangeLabel}`,
+    text: `${formatCurrency(stats.totalRevenue)} in revenue, ${formatCurrency(stats.totalProfit, true)} net profit, ${margin}% margin, and an average sale value of ${formatCurrency(avgSaleValue)}.`,
+    ariaLabel: `Revenue chart for the ${rangeLabel}: ${salesData.length} sales, ${formatCurrency(stats.totalRevenue)} in revenue, ${formatCurrency(stats.totalProfit, true)} net profit, and ${margin}% margin.`
+  };
+}
+
 function renderChurningDashboardCard() {
   const orders = getChurningOrders();
   const monthlyOrders = getChurningOrdersForMonth(orders);
@@ -176,6 +205,7 @@ export function DashboardView() {
 
   const rolling30DSales = getSalesByDateRange(thirtyDaysAgo, now);
   const rolling30DStats = calculateMonthlyStats(rolling30DSales);
+  const chartSummary = getRevenueChartSummary(salesData, selectedRange);
 
   const returnAlertsHtml = renderReturnAlerts();
 
@@ -215,7 +245,11 @@ export function DashboardView() {
             </div>
           </div>
           <div class="chart-wrapper">
-            <canvas id="dashboard-chart"></canvas>
+            <canvas id="dashboard-chart" role="img" aria-label="${chartSummary.ariaLabel}">${chartSummary.text}</canvas>
+          </div>
+          <div class="chart-summary">
+            <div class="chart-summary-title" id="dashboard-chart-summary-title">${chartSummary.title}</div>
+            <p class="chart-summary-text" id="dashboard-chart-summary-text">${chartSummary.text}</p>
           </div>
         </div>
         
@@ -677,6 +711,7 @@ function animateDashboardTotals(stats) {
  */
 function updateDashboard() {
   const salesData = getSalesForSelectedRange();
+  const chartSummary = getRevenueChartSummary(salesData, selectedRange);
   const allLots = getLots();
   const unsoldUnits = allLots.reduce((sum, lot) => sum + (lot.remaining || 0), 0);
   const unsoldCostBasis = allLots.reduce((sum, lot) => sum + (lot.unitCost || 0) * (lot.remaining || 0), 0);
@@ -703,6 +738,13 @@ function updateDashboard() {
   if (contextLabel) {
     contextLabel.textContent = getContextualHeader();
   }
+
+  const summaryTitleEl = document.getElementById('dashboard-chart-summary-title');
+  const summaryTextEl = document.getElementById('dashboard-chart-summary-text');
+  const chartCanvas = document.getElementById('dashboard-chart');
+  if (summaryTitleEl) summaryTitleEl.textContent = chartSummary.title;
+  if (summaryTextEl) summaryTextEl.textContent = chartSummary.text;
+  if (chartCanvas) chartCanvas.setAttribute('aria-label', chartSummary.ariaLabel);
 
   // Re-render chart
   initChart();
@@ -762,12 +804,18 @@ export function initDashboardEvents(isInitialLoad = false) {
 
   // Mark Returned buttons
   document.querySelectorAll('.mark-returned-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const lotId = btn.dataset.lotId;
-      if (confirm('Mark this item as returned? It will be removed from inventory.')) {
-        markReturned(lotId);
-        window.dispatchEvent(new CustomEvent('viewchange'));
-      }
+      const confirmed = await confirmAction({
+        title: 'Mark as returned',
+        message: 'Mark this item as returned? It will be removed from inventory.',
+        confirmLabel: 'Mark returned',
+        tone: 'danger'
+      });
+      if (!confirmed) return;
+
+      markReturned(lotId);
+      window.dispatchEvent(new CustomEvent('viewchange'));
     });
   });
 

@@ -80,6 +80,42 @@
 
 ## ACTIVE (In Progress / Known Issues / Next Up)
 
+### Audit / Critique Response (Priority Order)
+This section tracks the codebase-wide quality pass that followed the `/audit` and `/critique` review.
+
+**Completed from that pass**:
+- [x] **Primary nav accessibility fixed** - Mobile bottom nav now has accessible labels and active-page state instead of anonymous icon-only buttons
+- [x] **Custom sales dropdowns replaced with native controls** - Sales edit flow and desktop inventory sale drawer now use native `select` inputs instead of non-semantic custom dropdowns
+- [x] **Chart accessibility improved** - Mobile and desktop dashboards now include textual chart summaries and canvas labels so trend/segmentation views are not visual-only
+- [x] **Shared focus-state hardening** - Added stronger focus-visible treatment across nav, buttons, churning filters/status pills, and key interactive controls
+- [x] **Blocking browser dialogs removed from app flows** - Replaced `alert()` / `confirm()` usage in login, churning, dashboard return actions, inventory, and add-lot flows with in-app toast + confirm dialog patterns
+- [x] **Mobile churning route adapted** - Reordered the route phone-first, reduced cramped layout pressure, and fixed broken mobile status/action structure
+- [x] **Mobile inventory + add-lot pass completed** - Tightened mobile inventory card/modals, stacked narrow-screen transactional grids, and normalized the mobile add-lot flow away from several inline layout fragments
+- [x] **Add Lot + Inventory normalize/extract pass completed** - `src/views/AddLotView.js` and `src/views/InventoryView.js` now have zero inline `style=` fragments, with shared classes extracted for hidden file inputs, compact transactional form spacing, import feedback blocks, breakdown toggles, and lot-card entry states
+- [x] **Desktop layout adapt/harden pass completed** - Replaced the most brittle desktop width locks with fluid ranges across dashboard, inventory, add-flow, and churning shells; added tighter-width breakpoints for dashboard stacking and wrapped desktop toolbars/headers to hold together better on mid-size laptops and zoomed screens
+- [x] **Shared chrome visual quieting/distill pass completed** - Toned down the core teal/glass treatment across shared tokens, dashboard chrome, add-flow picker cards, and demo affordances; removed gradient-heavy heading treatment, softened panel/button emphasis, and reduced `src/views/DesktopDashboardView.js` to zero inline `style=` fragments by moving trend, tooltip, x-axis pill, and segmentation-row presentation back into reusable classes
+- [x] **Cloud sync auth fallback hardened** - Unconfigured Firebase builds no longer throw during Google sign-in. The app now surfaces a readable configuration error instead of passing a null provider into Firebase Auth, and the initial auth boot path also runs through the local safe wrapper.
+
+**Still open from that same review**:
+- [ ] **Inline styling / design-system drift still needs a final shell cleanup** - Add Lot, Inventory, and Desktop Dashboard are off the main inline-style backlog now. The remaining hotspots are the smaller shell leftovers in `src/main.js` (`5` inline `style=` usages) and `src/components/LoginModal.js` (`2` inline `style=` usages).
+  Impeccable skills: `/normalize` first to pull the remaining shell/UI affordances back onto the Vision token rails, then `/extract` to consolidate shared prompt/auth/demo fragments instead of keeping one-offs.
+  Best order now: shell leftovers only.
+- [x] **Visual language quieted and distilled** - The shared chrome now stays in the Vision dark family with more restrained teal usage, less decorative blur/gradient weight, calmer dashboard surfaces, and quieter onboarding/demo treatments.
+- [x] **Rigid desktop layout widths adapted** - Dashboard content width, KPI/chart segmentation regions, inventory detail rails/search/header rows, add-inventory side rails, date popovers, and the desktop churning shell now use fluid sizing or tighter-screen breakpoints instead of the most fragile fixed desktop anchors.
+- [ ] **Remaining shell consistency cleanup** - Shared shell components still have some one-off interaction code, including inline `onclick` handlers across `src/components/Sidebar.js`, `src/components/demoTour.js`, and `src/main.js` (mobile prompt/demo affordances).
+  Impeccable skills: `/extract` to consolidate shared shell behaviors and `/normalize` to align auth/demo/prompt affordances with the same interaction language.
+  Goal: move more shell behavior to event wiring/shared patterns instead of route-specific inline snippets.
+- [ ] **Bundle / environment warnings remain** - Fresh `npm run build` on **March 24, 2026** still reports two issues: Node `20.17.0` is below Vite's recommended `20.19+`, and the main JS chunk is still **596.05 kB** after minification.
+  Impeccable skill: `/optimize`.
+  Likely work: lazy-load OCR/Tesseract-heavy paths, isolate Firebase/chart code where possible, and only touch `chunkSizeWarningLimit` after real chunking work has been attempted.
+
+**Recommended audit closeout order**:
+1. [x] `/normalize` + `/extract` on Add Lot and Inventory to eliminate the largest concentration of inline styling and one-off layout rules.
+2. [x] `/adapt` + `/harden` on the desktop layout so width cleanup happens before the final visual pass.
+3. [x] `/quieter` + `/distill` across shared chrome and dashboard surfaces once the structure is more flexible.
+4. `/extract` + `/normalize` on Sidebar, DemoTour, and shell prompts to finish shared interaction consistency.
+5. `/optimize` for build warnings, code-splitting, and environment cleanup once the UI structure is stable enough not to churn again.
+
 ### Known Issues
 - [ ] **OCR name parsing still unreliable** - Works well for Amazon, struggles with Woot, some Target formats. Grabs shipping addresses or navigation headers instead of product names on some receipts. The scoring heuristic is good but not perfect across all retailers.
 - [ ] **No "Simplify Name" feature** - User wants "Brand + Item" (e.g. "Nordivale Fireplace") but OCR returns full titles or garbage. Manual editing works but adds friction.
@@ -138,7 +174,7 @@ Credit card cashback arbitrage tracker now lives as its own tab in Vision and is
 - [ ] **More platform support** - Currently only Facebook (0%) and eBay (13.5%). Design doc mentions Amazon, Shopify, StockX, Whatnot. Demo data already uses these platforms but the fee calculation only handles 2.
 - [ ] **Smarter OCR fallback UX** - Auto-select text in name field on OCR failure so user can immediately type replacement. Clear button (X) inside the field. Larger zoomable image preview.
 - [ ] **Return window "Mark Returned" action** - Alert exists on desktop dashboard but the full "return or commit" workflow (write-off remaining qty as loss) needs refinement
-- [ ] **Mobile-specific improvements** - The design doc emphasized "parking lot optimized" (bright sunlight, one-handed use). Current mobile UI works but could be further optimized for outdoor use.
+- [ ] **Mobile-specific improvements** - Core mobile regressions were addressed in the audit-response pass, but the app still needs a broader "parking lot optimized" refinement pass for outdoor readability, thumb reach, and ultra-fast actions
 
 ### Technical Debt
 - [ ] **localStorage 5MB limit** - Fine for now, but reselling + churning data both live there and there is still no migration path to IndexedDB. The original SOP recommended IndexedDB.

@@ -12,8 +12,7 @@ import { BottomNav, initBottomNavEvents } from './components/BottomNav.js';
 import { Sidebar, initSidebarEvents, toggleSidebar, isSidebarCollapsed, updateSidebarAuthState } from './components/Sidebar.js';
 import { DesktopDashboardView, initDesktopDashboardEvents } from './views/DesktopDashboardView.js';
 import { LoginModal, initLoginModalEvents } from './components/LoginModal.js';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from './services/firebase.js';
+import { onUserChanged } from './services/firebase.js';
 import { initRippleEffects } from './utils/animations.js';
 import { initDemoTour } from './components/demoTour.js';
 
@@ -99,7 +98,7 @@ function scheduleViewChange() {
 }
 
 // Listen for the first auth state to trigger initial animations
-onAuthStateChanged(auth, () => {
+onUserChanged(() => {
   if (!initialViewRendered) {
     // Initial view content is already in DOM from initApp, 
     // now we just trigger the events/animations once

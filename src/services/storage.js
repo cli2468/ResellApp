@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = 'reselltracker_data';
 const STORAGE_VERSION = 3; // Adds churning cards + orders
+const STORAGE_BACKUP_PREFIX = 'reselltracker_backup_';
 
 import {
     saveLotToCloud,
@@ -193,6 +194,46 @@ export function setChurningOrders(orders) {
 
 export function clearAllData() {
     saveStorageData(createEmptyStorageData());
+}
+
+function getUserBackupKey(uid) {
+    return `${STORAGE_BACKUP_PREFIX}${uid}`;
+}
+
+export function getStorageSnapshot() {
+    const data = getStorageData();
+    return {
+        version: data.version,
+        lots: [...data.lots],
+        churnCards: [...data.churnCards],
+        churningOrders: [...data.churningOrders]
+    };
+}
+
+export function backupCurrentDataForUser(uid) {
+    if (!uid || localStorage.getItem('demoMode') === 'true') return false;
+
+    try {
+        const snapshot = getStorageSnapshot();
+        localStorage.setItem(getUserBackupKey(uid), JSON.stringify(snapshot));
+        return true;
+    } catch (error) {
+        console.error('Failed to back up local data:', error);
+        return false;
+    }
+}
+
+export function getBackupDataForUser(uid) {
+    if (!uid) return createEmptyStorageData();
+
+    try {
+        const raw = localStorage.getItem(getUserBackupKey(uid));
+        if (!raw) return createEmptyStorageData();
+        return normalizeStorageData(JSON.parse(raw));
+    } catch (error) {
+        console.error('Failed to read backup data:', error);
+        return createEmptyStorageData();
+    }
 }
 
 function normalizeCashbackType(type) {

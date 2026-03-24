@@ -1,7 +1,22 @@
 // Login Modal Component
 import { signInWithGoogle, logout, auth, onUserChanged } from '../services/firebase.js';
-import { syncLots, syncChurningOrders, syncChurnCards } from '../services/firebaseSync.js';
-import { setLots, setChurningOrders, setChurnCards, clearAllData } from '../services/storage.js';
+import {
+  syncLots,
+  syncChurningOrders,
+  syncChurnCards,
+  uploadLocalData,
+  uploadLocalChurningOrders,
+  uploadLocalChurnCards
+} from '../services/firebaseSync.js';
+import {
+  setLots,
+  setChurningOrders,
+  setChurnCards,
+  clearAllData,
+  getStorageSnapshot,
+  backupCurrentDataForUser,
+  getBackupDataForUser
+} from '../services/storage.js';
 import { showToast } from '../services/feedback.js';
 
 let isOpen = false;
@@ -137,6 +152,62 @@ function closeModal() {
   }
 }
 
+function dispatchViewChange() {
+  window.dispatchEvent(new CustomEvent('viewchange'));
+}
+
+async function resolveInitialCollectionSync({
+  key,
+  cloudRecords,
+  localRecords,
+  backupRecords,
+  applyLocal,
+  uploadLocal,
+  resolvedKeys,
+  notifyBootstrap,
+  label
+}) {
+  const normalizedCloudRecords = Array.isArray(cloudRecords) ? cloudRecords : [];
+
+  if (resolvedKeys.has(key)) {
+    applyLocal(normalizedCloudRecords);
+    dispatchViewChange();
+    return;
+  }
+
+  resolvedKeys.add(key);
+
+  if (normalizedCloudRecords.length > 0) {
+    applyLocal(normalizedCloudRecords);
+    dispatchViewChange();
+    return;
+  }
+
+  const fallbackRecords = localRecords.length > 0 ? localRecords : backupRecords;
+  const fallbackSource = localRecords.length > 0 ? 'local' : 'backup';
+
+  if (fallbackRecords.length > 0) {
+    applyLocal(fallbackRecords);
+    dispatchViewChange();
+
+    notifyBootstrap(fallbackSource);
+
+    try {
+      await uploadLocal(fallbackRecords);
+    } catch (error) {
+      console.error(`Failed to bootstrap ${label} into cloud:`, error);
+      showToast(`Couldn't sync ${label} to the cloud yet. Your data is still safe on this device.`, {
+        variant: 'error',
+        title: 'Cloud sync'
+      });
+    }
+    return;
+  }
+
+  applyLocal([]);
+  dispatchViewChange();
+}
+
 let eventsInitialized = false;
 
 export function initLoginModalEvents() {
@@ -171,6 +242,7 @@ export function initLoginModalEvents() {
 
     // Sign out
     if (e.target.id === 'logout-btn') {
+      backupCurrentDataForUser(auth.currentUser?.uid);
       await logout();
       closeModal();
     }
@@ -188,18 +260,61 @@ export function initLoginModalEvents() {
   onUserChanged((user) => {
     if (user && !syncInitialized) {
       syncInitialized = true;
+      const localSnapshot = getStorageSnapshot();
+      const backupSnapshot = getBackupDataForUser(user.uid);
+      const resolvedKeys = new Set();
+      let bootstrapNoticeShown = false;
+
+      const notifyBootstrap = (source) => {
+        if (bootstrapNoticeShown) return;
+        bootstrapNoticeShown = true;
+        showToast(
+          source === 'backup'
+            ? 'Recovered your last local backup and started syncing it to the cloud.'
+            : 'Found local data on this device and started syncing it to the cloud.',
+          { title: 'Cloud sync' }
+        );
+      };
+
       syncUnsubscribes = [
-        syncLots((cloudLots) => {
-          setLots(cloudLots);
-          window.dispatchEvent(new CustomEvent('viewchange'));
+        syncLots(async (cloudLots) => {
+          await resolveInitialCollectionSync({
+            key: 'lots',
+            cloudRecords: cloudLots,
+            localRecords: localSnapshot.lots,
+            backupRecords: backupSnapshot.lots,
+            applyLocal: setLots,
+            uploadLocal: uploadLocalData,
+            resolvedKeys,
+            notifyBootstrap,
+            label: 'inventory'
+          });
         }),
-        syncChurningOrders((cloudOrders) => {
-          setChurningOrders(cloudOrders);
-          window.dispatchEvent(new CustomEvent('viewchange'));
+        syncChurningOrders(async (cloudOrders) => {
+          await resolveInitialCollectionSync({
+            key: 'churningOrders',
+            cloudRecords: cloudOrders,
+            localRecords: localSnapshot.churningOrders,
+            backupRecords: backupSnapshot.churningOrders,
+            applyLocal: setChurningOrders,
+            uploadLocal: uploadLocalChurningOrders,
+            resolvedKeys,
+            notifyBootstrap,
+            label: 'churning orders'
+          });
         }),
-        syncChurnCards((cloudCards) => {
-          setChurnCards(cloudCards);
-          window.dispatchEvent(new CustomEvent('viewchange'));
+        syncChurnCards(async (cloudCards) => {
+          await resolveInitialCollectionSync({
+            key: 'churnCards',
+            cloudRecords: cloudCards,
+            localRecords: localSnapshot.churnCards,
+            backupRecords: backupSnapshot.churnCards,
+            applyLocal: setChurnCards,
+            uploadLocal: uploadLocalChurnCards,
+            resolvedKeys,
+            notifyBootstrap,
+            label: 'cards'
+          });
         })
       ].filter(Boolean);
     } else if (!user) {
@@ -213,7 +328,7 @@ export function initLoginModalEvents() {
         clearAllData();
       }
 
-      window.dispatchEvent(new CustomEvent('viewchange'));
+      dispatchViewChange();
     }
   });
 }

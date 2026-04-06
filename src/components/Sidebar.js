@@ -3,8 +3,29 @@
 import { navigate } from '../router.js';
 import { resetAddLotState } from '../views/AddLotView.js';
 import { auth, logout } from '../services/firebase.js';
+import { backupCurrentDataForUser } from '../services/storage.js';
 
 let isCollapsed = false;
+
+function getUserInitials(user) {
+  const name = (user?.displayName || user?.email || '').trim();
+  if (!name) return '??';
+
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
+
+function getUserLabel(user) {
+  return (user?.displayName || user?.email || 'Account').trim();
+}
+
+function getUserSubLabel(user) {
+  return user?.email || 'Cloud Sync Active';
+}
 
 export function Sidebar(activeRoute = '/') {
   const user = auth.currentUser;
@@ -44,10 +65,10 @@ export function Sidebar(activeRoute = '/') {
   const authHtml = user ? `
     <div class="sidebar-profile-wrapper">
       <button class="sidebar-profile-btn" id="sidebar-profile-btn">
-        <div class="profile-avatar">CH</div>
+        <div class="profile-avatar">${getUserInitials(user)}</div>
         <div class="collapsible-content profile-info">
-          <div class="profile-name">Chris</div>
-          <div class="profile-role">Admin</div>
+          <div class="profile-name">${getUserLabel(user)}</div>
+          <div class="profile-role">${getUserSubLabel(user)}</div>
         </div>
       </button>
       <div class="profile-popover" id="profile-popover">
@@ -222,6 +243,7 @@ function bindAuthEvents() {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       if (profilePopover) profilePopover.classList.remove('visible');
+      backupCurrentDataForUser(auth.currentUser?.uid);
       await logout();
     });
   }
@@ -261,10 +283,10 @@ export function updateSidebarAuthState() {
   const authHtml = user ? `
     <div class="sidebar-profile-wrapper">
       <button class="sidebar-profile-btn" id="sidebar-profile-btn">
-        <div class="profile-avatar">CH</div>
+        <div class="profile-avatar">${getUserInitials(user)}</div>
         <div class="collapsible-content profile-info">
-          <div class="profile-name">Chris</div>
-          <div class="profile-role">Admin</div>
+          <div class="profile-name">${getUserLabel(user)}</div>
+          <div class="profile-role">${getUserSubLabel(user)}</div>
         </div>
       </button>
       <div class="profile-popover" id="profile-popover">

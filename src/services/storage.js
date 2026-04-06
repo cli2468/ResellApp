@@ -276,7 +276,7 @@ function buildChurningOrderPayload(orderData, existingOrder = null) {
 
     return {
         id: existingOrder?.id || generateId(),
-        store: (orderData.store ?? existingOrder?.store ?? 'Unknown Store').trim(),
+        itemName: (orderData.itemName ?? orderData.store ?? existingOrder?.itemName ?? existingOrder?.store ?? 'Unknown Item').trim(),
         purchaseAmount,
         reimbursementAmount,
         cardId: resolvedCardId,

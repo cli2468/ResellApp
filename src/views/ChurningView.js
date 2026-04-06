@@ -38,7 +38,7 @@ function todayStr() {
 
 function createOrderDraft(overrides = {}) {
   return {
-    store: '',
+    itemName: '',
     purchaseAmount: '',
     reimbursementAmount: '',
     cardId: '',
@@ -250,8 +250,8 @@ function renderOrderComposer(cards) {
       <form id="churn-order-form">
         <div class="churn-form-grid three-up">
           <div class="form-group">
-            <label class="form-label" for="churn-store">Store</label>
-            <input class="form-input" id="churn-store" type="text" value="${escapeHtml(orderDraft.store)}" placeholder="Amazon" />
+            <label class="form-label" for="churn-item-name">Item Name</label>
+            <input class="form-input" id="churn-item-name" type="text" value="${escapeHtml(orderDraft.itemName)}" placeholder="AirPods Pro" />
           </div>
 
           <div class="form-group">
@@ -345,7 +345,7 @@ function renderOrderCard(order) {
     <article class="churn-order-card ${statusClass}">
       <div class="churn-order-top">
         <div>
-          <div class="churn-order-store">${escapeHtml(order.store)}</div>
+          <div class="churn-order-store">${escapeHtml(order.itemName || order.store || 'Unknown Item')}</div>
           <div class="churn-order-meta">
             ${escapeHtml(order.cardName || 'Unknown Card')} · ${Number(order.cashbackRate || 0).toFixed(2)}% · Bought ${formatDate(order.purchaseDate, 'long')}
           </div>
@@ -483,7 +483,7 @@ function startEditingOrder(orderId) {
 
   editingOrderId = orderId;
   orderDraft = createOrderDraft({
-    store: order.store || '',
+    itemName: order.itemName || order.store || '',
     purchaseAmount: centsToInput(order.purchaseAmount),
     reimbursementAmount: centsToInput(order.reimbursementAmount),
     cardId: order.cardId || '',
@@ -556,14 +556,14 @@ export function initChurningEvents() {
   document.getElementById('churn-order-form')?.addEventListener('submit', (event) => {
     event.preventDefault();
 
-    const store = document.getElementById('churn-store')?.value.trim() || '';
+    const itemName = document.getElementById('churn-item-name')?.value.trim() || '';
     const purchaseAmountInput = document.getElementById('churn-purchase-amount')?.value || '';
     const reimbursementAmountInput = document.getElementById('churn-reimbursement-amount')?.value || purchaseAmountInput;
     const cardId = document.getElementById('churn-card-select')?.value || '';
     const purchaseDate = document.getElementById('churn-purchase-date')?.value || todayStr();
 
-    if (!store || !cardId) {
-      showToast('Choose a store and card before saving an order.', {
+    if (!itemName || !cardId) {
+      showToast('Enter an item name and card before saving an order.', {
         variant: 'error',
         title: 'Order details'
       });
@@ -582,7 +582,7 @@ export function initChurningEvents() {
     }
 
     const payload = {
-      store,
+      itemName,
       purchaseAmount,
       reimbursementAmount,
       cardId,

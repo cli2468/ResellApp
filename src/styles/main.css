@@ -5004,3 +5004,344 @@ p {
   flex-direction: column;
   gap: 4px;
 }
+
+/* ===== Flex Card (shareable sale graphic) ===== */
+
+.flex-card-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(6, 7, 8, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: flexOverlayIn 0.22s ease;
+  --flex-accent: #34D399;
+}
+
+.flex-card-overlay.is-loss {
+  --flex-accent: #F87171;
+}
+
+.flex-card-overlay.closing {
+  animation: flexOverlayOut 0.2s ease forwards;
+}
+
+@keyframes flexOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes flexOverlayOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.flex-card-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  max-width: 100%;
+}
+
+/* The card itself is a fixed 840x570 canvas, scaled down to fit small screens */
+.flex-card {
+  position: relative;
+  width: 840px;
+  height: 570px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #0E0F10;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.65);
+  transform-origin: center center;
+  animation: flexCardIn 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes flexCardIn {
+  from { opacity: 0; transform: scale(0.92) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.flex-card-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.012) 55%, rgba(0, 0, 0, 0.2) 100%);
+  pointer-events: none;
+}
+
+.flex-card-body {
+  position: absolute;
+  inset: 0;
+  padding: 44px 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.flex-card-item {
+  max-width: 430px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 2.75rem;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: #FFFFFF;
+  text-transform: uppercase;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.flex-card-submeta {
+  margin-top: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Shrink-wraps the value, so the bar is exactly as wide as the number it holds. */
+.flex-card-hero {
+  margin-top: 26px;
+  align-self: flex-start;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 16px 28px 18px;
+  border-radius: 6px;
+  background: var(--flex-accent);
+  width: max-content;
+  max-width: 440px;
+}
+
+.flex-hero-label {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: rgba(10, 12, 12, 0.62);
+}
+
+.flex-hero-value {
+  font-family: var(--font-mono);
+  font-size: 2.9rem;
+  font-weight: 700;
+  line-height: 1.05;
+  color: #0B0D0D;
+  white-space: nowrap;
+}
+
+/* Very long values step down so the bar stays within the text column */
+.flex-hero-value.is-xlong {
+  font-size: 2.4rem;
+}
+
+.flex-card-stats {
+  margin-top: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.flex-stat {
+  display: flex;
+  align-items: baseline;
+}
+
+.flex-stat-label {
+  flex: 0 0 168px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 1.14rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.flex-stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.14rem;
+  font-weight: 600;
+  color: #FFFFFF;
+}
+
+.flex-stat-value.flex-stat-accent {
+  color: var(--flex-accent);
+}
+
+/* Artwork */
+.flex-art {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 570px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.flex-beam-up,
+.flex-beam-down {
+  animation: flexBeamPulse 3.2s ease-in-out infinite;
+}
+
+.flex-beam-down {
+  transform: scaleY(-1);
+  transform-origin: center;
+}
+
+@keyframes flexBeamPulse {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1; }
+}
+
+.flex-boxes {
+  animation: flexBoxFloat 5s ease-in-out infinite;
+}
+
+@keyframes flexBoxFloat {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+
+.flex-sparks circle {
+  animation: flexSparkDrift 4.5s ease-in-out infinite;
+}
+
+.flex-sparks circle:nth-child(2) { animation-delay: 0.9s; }
+.flex-sparks circle:nth-child(3) { animation-delay: 1.8s; }
+.flex-sparks circle:nth-child(4) { animation-delay: 2.6s; }
+
+@keyframes flexSparkDrift {
+  0%, 100% { transform: translateY(0); opacity: 0.35; }
+  50%      { transform: translateY(-12px); opacity: 0.8; }
+}
+
+/* Actions below the card */
+.flex-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.flex-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.flex-action-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.flex-action-btn:active {
+  transform: translateY(1px);
+}
+
+.flex-action-close {
+  color: var(--text-secondary);
+}
+
+/* Responsive: scale the fixed-size card down on narrow screens */
+@media (max-width: 940px) {
+  .flex-card {
+    transform: scale(0.78);
+    margin: -63px -92px;
+  }
+}
+
+@media (max-width: 720px) {
+  .flex-card-overlay {
+    padding: 16px;
+  }
+
+  .flex-card {
+    transform: scale(0.56);
+    margin: -125px -185px;
+  }
+
+  .flex-action-btn {
+    padding: 9px 14px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 460px) {
+  .flex-card {
+    transform: scale(0.42);
+    margin: -165px -244px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flex-card,
+  .flex-card-overlay,
+  .flex-beam-up,
+  .flex-beam-down,
+  .flex-boxes,
+  .flex-sparks circle {
+    animation: none;
+  }
+}
+
+/* Flex button in the inventory detail panel */
+.panel-flex-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  background: rgba(52, 211, 153, 0.1);
+  color: #34D399;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.panel-flex-btn:hover {
+  background: rgba(52, 211, 153, 0.18);
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+/* Keeps "View Sales" and the Flex button on one line in mobile lot cards */
+.lot-card-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lot-card-toggle-row .toggle-sales {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lot-card-toggle-row .panel-flex-btn {
+  flex: 0 0 auto;
+  margin-left: 0;
+  padding: 6px 12px;
+}

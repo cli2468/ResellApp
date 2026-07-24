@@ -4,6 +4,7 @@
 import { getLots, recordSale, deleteLot, isFullySold, hasSales, getLotTotalProfit, getReturnDeadline, getDaysUntilReturn } from '../services/storage.js';
 import { formatCurrency, formatDate, PLATFORM_FEES, calculateSaleProfit } from '../services/calculations.js';
 import { celebrateSuccess } from '../utils/animations.js';
+import { openLotFlexCard } from '../components/FlexCard.js';
 
 // Import shared state from InventoryView
 import { setActiveTab, getActiveTab, setSearchQuery, getSearchQuery } from './InventoryView.js';
@@ -327,6 +328,15 @@ function renderIntelligencePanel(lot) {
           <span>Purchased ${purchaseDate}</span>
           <span class="meta-sep">·</span>
           <span>${lot.quantity} units total</span>
+          ${stats.unitsSold > 0 ? `
+            <button class="panel-flex-btn" id="flex-lot-btn" data-lot-id="${lot.id}" title="Share this lot's totals">
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+              </svg>
+              <span>Flex</span>
+            </button>
+          ` : ''}
         </div>
       </div>
 
@@ -825,6 +835,16 @@ function attachPanelEvents() {
         rightPanel.innerHTML = renderSaleDrawer(selectedLot);
         attachDrawerEvents(selectedLot);
       }
+    });
+  }
+
+  // Aggregated flex card for the whole lot
+  const flexLotBtn = document.getElementById('flex-lot-btn');
+  if (flexLotBtn) {
+    flexLotBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lot = getLots().find(l => l.id === flexLotBtn.dataset.lotId);
+      if (lot) openLotFlexCard(lot);
     });
   }
 

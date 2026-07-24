@@ -3,6 +3,7 @@
 import { getAllSales, getLots, updateSale, deleteSale } from '../services/storage.js';
 import { formatCurrency } from '../services/calculations.js';
 import { renderPlatformBadge } from '../services/uiHelpers.js';
+import { openFlexCard } from '../components/FlexCard.js';
 import { navigate } from '../router.js';
 
 let currentSort = { key: 'date', direction: 'desc' };
@@ -369,6 +370,12 @@ function renderSalesRows(sales, lots) {
           <div class="sale-col-roi accent-teal">+${roi}%</div>
           <div class="sale-col-qty">${units}</div>
           <div class="sale-col-actions hover-actions">
+            <button class="icon-btn flex-sale-btn" data-lot-id="${lot.id}" data-sale-idx="${saleIndex}" title="Flex this sale">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+              </svg>
+            </button>
             <button class="icon-btn edit-sale-btn" data-lot-id="${lot.id}" data-sale-idx="${saleIndex}" title="Edit Sale">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -682,6 +689,16 @@ function formatShortDate(isoString) {
 }
 
 export function initSalesEvents() {
+  // Flex card buttons - available on mobile too, so bind before the desktop guard
+  document.querySelectorAll('.flex-sale-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lot = getLots().find(l => l.id === btn.dataset.lotId);
+      const sale = lot?.sales?.[parseInt(btn.dataset.saleIdx)];
+      if (lot && sale) openFlexCard(lot, sale);
+    });
+  });
+
   const isDesktop = window.innerWidth >= 1024;
   if (!isDesktop) return;
   // Row Expand Toggle

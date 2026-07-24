@@ -3961,7 +3961,7 @@
   }
 
   .sale-col-actions {
-    flex: 0 0 60px;
+    flex: 0 0 92px;
     display: flex;
     justify-content: flex-end;
     gap: 4px;
@@ -4031,6 +4031,11 @@
   .icon-btn.delete-sale-btn:hover {
     background: rgba(248, 113, 113, 0.15);
     color: #F87171;
+  }
+
+  .icon-btn.flex-sale-btn:hover {
+    background: rgba(52, 211, 153, 0.15);
+    color: #34D399;
   }
 
   /* Expanded Area */

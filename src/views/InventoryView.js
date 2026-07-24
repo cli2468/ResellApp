@@ -6,6 +6,7 @@ import { importLotsFromCSV, generateCSVTemplate } from '../services/csvImport.js
 import { celebrateSuccess } from '../utils/animations.js';
 import { DesktopInventoryView, initDesktopInventoryEvents } from './DesktopInventoryView.js';
 import { confirmAction, showToast } from '../services/feedback.js';
+import { openLotFlexCard } from '../components/FlexCard.js';
 
 let activeTab = 'unsold';
 let searchQuery = '';
@@ -191,12 +192,21 @@ function renderLotCard(lot, index = 0) {
   ` : '';
 
   const viewSalesBtn = hasAnySales ? `
-    <button class="btn btn-text toggle-sales ${isExpanded ? 'active' : ''}" data-lot-id="${lot.id}">
-      ${isExpanded ? 'Hide Sales' : `View ${lot.sales.length} Sale${lot.sales.length > 1 ? 's' : ''}`}
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="toggle-arrow">
-        <polyline points="6 9 12 15 18 9"></polyline>
-      </svg>
-    </button>
+    <div class="lot-card-toggle-row">
+      <button class="btn btn-text toggle-sales ${isExpanded ? 'active' : ''}" data-lot-id="${lot.id}">
+        ${isExpanded ? 'Hide Sales' : `View ${lot.sales.length} Sale${lot.sales.length > 1 ? 's' : ''}`}
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="toggle-arrow">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <button class="panel-flex-btn lot-flex-btn" data-lot-id="${lot.id}" title="Share this lot's totals">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+          <polyline points="17 6 23 6 23 12"></polyline>
+        </svg>
+        <span>Flex</span>
+      </button>
+    </div>
   ` : '';
 
   // Sold out badge
@@ -880,6 +890,15 @@ function initLotCardEvents() {
       }
     });
   }, 50);
+
+  // Aggregated flex card for a whole lot
+  document.querySelectorAll('.lot-flex-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lot = getLots().find(l => l.id === btn.dataset.lotId);
+      if (lot) openLotFlexCard(lot);
+    });
+  });
 
   // Toggle sales list - accordion animation without page refresh
   document.querySelectorAll('.toggle-sales').forEach(btn => {

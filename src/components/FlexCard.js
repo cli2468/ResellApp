@@ -176,7 +176,7 @@ function formatFlexDate(iso) {
 function renderArtwork(isProfit) {
   const beam = isProfit ? 'flex-beam-up' : 'flex-beam-down';
   return `
-    <svg class="flex-art" viewBox="0 0 320 570" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg class="flex-art" viewBox="0 0 400 570" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
         <linearGradient id="flexBoxFace" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stop-color="rgba(255,255,255,0.14)"/>
@@ -199,36 +199,39 @@ function renderArtwork(isProfit) {
 
       <ellipse cx="196" cy="248" rx="190" ry="200" fill="url(#flexHalo)"/>
 
-      <!-- rising trend beam -->
-      <g class="${beam}">
-        <path d="M46 452 L142 356 L206 404 L300 268" stroke="url(#flexGlow)" stroke-width="10"
-              stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-        <circle cx="300" cy="268" r="11" fill="var(--flex-accent)"/>
-        <circle cx="300" cy="268" r="21" fill="var(--flex-accent)" opacity="0.22"/>
-      </g>
-
-      <!-- stacked shipping boxes, isometric -->
-      <g class="flex-boxes">
-        <g class="flex-box flex-box-back">
-          <path d="M96 236 L166 200 L236 236 L166 272 Z" fill="url(#flexBoxTop)"/>
-          <path d="M96 236 L166 272 L166 356 L96 320 Z" fill="url(#flexBoxFace)"/>
-          <path d="M236 236 L166 272 L166 356 L236 320 Z" fill="rgba(0,0,0,0.34)"/>
-          <path d="M131 218 L201 254 L201 268 L131 232 Z" fill="var(--flex-accent)" opacity="0.5"/>
+      <!-- Solid elements ride above the halo, which stays anchored -->
+      <g transform="translate(0, -56)">
+        <!-- rising trend beam -->
+        <g class="${beam}">
+          <path d="M46 452 L142 356 L206 404 L300 268" stroke="url(#flexGlow)" stroke-width="10"
+                stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+          <circle cx="300" cy="268" r="11" fill="var(--flex-accent)"/>
+          <circle cx="300" cy="268" r="21" fill="var(--flex-accent)" opacity="0.22"/>
         </g>
-        <g class="flex-box flex-box-front">
-          <path d="M112 330 L176 298 L240 330 L176 362 Z" fill="url(#flexBoxTop)"/>
-          <path d="M112 330 L176 362 L176 440 L112 408 Z" fill="url(#flexBoxFace)"/>
-          <path d="M240 330 L176 362 L176 440 L240 408 Z" fill="rgba(0,0,0,0.34)"/>
-          <path d="M144 314 L208 346 L208 360 L144 328 Z" fill="var(--flex-accent)" opacity="0.62"/>
-        </g>
-      </g>
 
-      <!-- drifting sparks -->
-      <g class="flex-sparks">
-        <circle cx="72" cy="150" r="3" fill="var(--flex-accent)" opacity="0.55"/>
-        <circle cx="268" cy="140" r="4" fill="var(--flex-accent)" opacity="0.4"/>
-        <circle cx="292" cy="470" r="3" fill="var(--flex-accent)" opacity="0.45"/>
-        <circle cx="56" cy="392" r="2.5" fill="var(--flex-accent)" opacity="0.4"/>
+        <!-- stacked shipping boxes, isometric -->
+        <g class="flex-boxes">
+          <g class="flex-box flex-box-back">
+            <path d="M96 236 L166 200 L236 236 L166 272 Z" fill="url(#flexBoxTop)"/>
+            <path d="M96 236 L166 272 L166 356 L96 320 Z" fill="url(#flexBoxFace)"/>
+            <path d="M236 236 L166 272 L166 356 L236 320 Z" fill="rgba(0,0,0,0.34)"/>
+            <path d="M131 218 L201 254 L201 268 L131 232 Z" fill="var(--flex-accent)" opacity="0.5"/>
+          </g>
+          <g class="flex-box flex-box-front">
+            <path d="M112 330 L176 298 L240 330 L176 362 Z" fill="url(#flexBoxTop)"/>
+            <path d="M112 330 L176 362 L176 440 L112 408 Z" fill="url(#flexBoxFace)"/>
+            <path d="M240 330 L176 362 L176 440 L240 408 Z" fill="rgba(0,0,0,0.34)"/>
+            <path d="M144 314 L208 346 L208 360 L144 328 Z" fill="var(--flex-accent)" opacity="0.62"/>
+          </g>
+        </g>
+
+        <!-- drifting sparks -->
+        <g class="flex-sparks">
+          <circle cx="72" cy="150" r="3" fill="var(--flex-accent)" opacity="0.55"/>
+          <circle cx="268" cy="140" r="4" fill="var(--flex-accent)" opacity="0.4"/>
+          <circle cx="292" cy="470" r="3" fill="var(--flex-accent)" opacity="0.45"/>
+          <circle cx="56" cy="392" r="2.5" fill="var(--flex-accent)" opacity="0.4"/>
+        </g>
       </g>
     </svg>
   `;
@@ -400,15 +403,6 @@ function renderCardToBlob() {
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, W, H);
 
-  // Accent halo behind the artwork
-  const halo = ctx.createRadialGradient(640, 250, 20, 640, 250, 300);
-  halo.addColorStop(0, accentDim + '0.20)');
-  halo.addColorStop(1, accentDim + '0)');
-  ctx.fillStyle = halo;
-  ctx.fillRect(380, 0, W - 380, H);
-
-  drawArtwork(ctx, accent, isProfit);
-
   const PAD = 52;
 
   ctx.textBaseline = 'alphabetic';
@@ -422,10 +416,25 @@ function renderCardToBlob() {
 
   // Center the whole text block vertically, matching the on-screen card
   const statCount = buildStats(d).length;
-  const blockH = nameLines.length * 50 + (metaBits ? 30 : 0) + 18 + 82 + 52 + (statCount - 1) * 40;
+  const blockH = nameLines.length * 50 + (metaBits ? 30 : 0) + 18 + 102 + 52 + (statCount - 1) * 40;
   let y = Math.max(96, Math.round((H - blockH) / 2) + 44);
 
+  // Top of the title's caps - the halo and artwork align to this
+  const titleCapTop = y - Math.round(44 * 0.72);
+
+  // Accent halo behind the artwork, top-aligned with the title. Filled across the
+  // whole card - the gradient fades out on its own, so clipping would leave an edge.
+  const haloR = 300;
+  const halo = ctx.createRadialGradient(616, titleCapTop + haloR * 0.62, 20, 616, titleCapTop + haloR * 0.62, haloR);
+  halo.addColorStop(0, accentDim + '0.20)');
+  halo.addColorStop(1, accentDim + '0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, W, H);
+
+  drawArtwork(ctx, accent, isProfit, titleCapTop);
+
   // Item name (wraps to 2 lines max)
+  ctx.font = '700 44px "DM Sans", system-ui, sans-serif';
   ctx.fillStyle = '#FFFFFF';
   nameLines.forEach(line => {
     ctx.fillText(line, PAD, y);
@@ -441,10 +450,15 @@ function renderCardToBlob() {
 
   // Hero profit bar. Sized to the value it holds, so the block is exactly as
   // wide as the number rather than leaving dead space beside short amounts.
+  // Metrics mirror the on-screen card's box model (16px top / 18px bottom
+  // padding, 2px gap) so the export and the preview agree.
   const heroY = y + (metaBits ? 18 : 0);
-  const heroH = 82;
   const heroText = formatCurrency(d.profit, true);
   const heroPadX = 28;
+  const heroPadTop = 16;
+  const heroPadBottom = 18;
+  const heroGap = 10;
+  const heroLabelSize = 13;
 
   // Only step down for extreme amounts that would push the bar past the text column
   let heroSize = 46;
@@ -456,26 +470,42 @@ function renderCardToBlob() {
 
   const heroLabel = d.heroLabel || 'NET';
   const heroValueW = ctx.measureText(heroText).width;
-  ctx.font = '600 15px "DM Sans", system-ui, sans-serif';
+  ctx.font = `600 ${heroLabelSize}px "DM Sans", system-ui, sans-serif`;
   ctx.letterSpacing = '2px';
   const heroLabelW = ctx.measureText(heroLabel).width;
   ctx.letterSpacing = '0px';
 
   const heroW = Math.max(heroValueW, heroLabelW) + heroPadX * 2;
 
+  // Measure real glyph extents rather than estimating from font size, so the
+  // label and the value can never collide no matter which font actually loads.
+  ctx.font = `600 ${heroLabelSize}px "DM Sans", system-ui, sans-serif`;
+  const labelM = ctx.measureText(heroLabel);
+  const labelAscent = labelM.actualBoundingBoxAscent || heroLabelSize * 0.72;
+  const labelDescent = labelM.actualBoundingBoxDescent || heroLabelSize * 0.22;
+
+  ctx.font = `700 ${heroSize}px "JetBrains Mono", "SF Mono", monospace`;
+  const valueM = ctx.measureText(heroText);
+  const valueAscent = valueM.actualBoundingBoxAscent || heroSize * 0.75;
+  const valueDescent = valueM.actualBoundingBoxDescent || heroSize * 0.25;
+
+  const labelBaseline = heroY + heroPadTop + labelAscent;
+  const valueBaseline = labelBaseline + labelDescent + heroGap + valueAscent;
+  const heroH = Math.round(valueBaseline + valueDescent + heroPadBottom - heroY);
+
   ctx.fillStyle = accent;
   roundRect(ctx, PAD, heroY, heroW, heroH, 6);
   ctx.fill();
 
   ctx.fillStyle = 'rgba(10,12,12,0.62)';
-  ctx.font = '600 15px "DM Sans", system-ui, sans-serif';
+  ctx.font = `600 ${heroLabelSize}px "DM Sans", system-ui, sans-serif`;
   ctx.letterSpacing = '2px';
-  ctx.fillText(heroLabel, PAD + heroPadX, heroY + 34);
+  ctx.fillText(heroLabel, PAD + heroPadX, labelBaseline);
   ctx.letterSpacing = '0px';
 
   ctx.fillStyle = '#0B0D0D';
   ctx.font = `700 ${heroSize}px "JetBrains Mono", "SF Mono", monospace`;
-  ctx.fillText(heroText, PAD + heroPadX, heroY + 66);
+  ctx.fillText(heroText, PAD + heroPadX, valueBaseline);
 
   // Stats rows
   const stats = buildStats(d);
@@ -496,9 +526,14 @@ function renderCardToBlob() {
   return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 }
 
-function drawArtwork(ctx, accent, isProfit) {
+const ART_LIFT = 56; // boxes/beam/sparks ride above the halo's center
+
+function drawArtwork(ctx, accent, isProfit, titleCapTop = 112) {
   ctx.save();
-  ctx.translate(520, 0);
+  // Artwork paths are authored against a 570-tall box whose visual top sits at
+  // y=48. Align that top to the title, then lift the solid elements so they sit
+  // higher than the halo (which is drawn separately and stays put).
+  ctx.translate(440, titleCapTop - 48 - ART_LIFT);
 
   // Trend beam
   const beamGrad = ctx.createLinearGradient(46, 452, 300, 268);

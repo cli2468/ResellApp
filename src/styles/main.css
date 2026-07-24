@@ -5116,7 +5116,7 @@ p {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 6px;
   padding: 16px 28px 18px;
   border-radius: 6px;
   background: var(--flex-accent);
@@ -5178,11 +5178,13 @@ p {
 }
 
 /* Artwork */
+/* viewBox is 400 wide so the halo (which extends past x=320) isn't clipped;
+   the extra 80px sits off the card's right edge. */
 .flex-art {
   position: absolute;
   top: 0;
   right: 0;
-  width: 320px;
+  width: 400px;
   height: 570px;
   z-index: 1;
   pointer-events: none;
